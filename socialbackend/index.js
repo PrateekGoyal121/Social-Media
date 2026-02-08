@@ -17,6 +17,9 @@ app.get("/", (req, res) => {
   res.send("Server running 🚀");
 });
 
+const auth = require("./routes/authRoutes");
+app.use("/api/v1", auth);
+
 app.listen(PORT, () => {
   console.log(`APP is listening at ${PORT}`);
 });
