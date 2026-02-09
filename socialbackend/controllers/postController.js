@@ -101,6 +101,9 @@ const deletePost = async (req, res) => {
     const post = await Post.findById(req.params.postId);
 
     if (!post) {
+      console.log("DB POST:", await Post.find());
+    console.log("REQ.USER:", req.user);
+    console.log("POST AUTHOR:", post.author.toString());
       return res.status(404).json({ message: "Post not found" });
     }
 
@@ -110,6 +113,9 @@ const deletePost = async (req, res) => {
 
     await Post.findByIdAndDelete(post._id);
     await Comment.deleteMany({ postId: post._id });
+    console.log("DB POST:", await Post.find());
+    console.log("REQ.USER:", req.user);
+    console.log("POST AUTHOR:", post.author.toString());
 
     res.json({ success: true, message: "Post deleted" });
   } catch (error) {

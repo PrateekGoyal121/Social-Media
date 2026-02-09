@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const commentSchema = new mongoose.Schema(
   {
@@ -19,9 +19,7 @@ const commentSchema = new mongoose.Schema(
       maxlength: 1000,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
-const Comment = mongoose.model("Comment", commentSchema);
-export default Comment;
+
+module.exports = mongoose.model("Comment", commentSchema);

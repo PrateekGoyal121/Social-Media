@@ -31,8 +31,10 @@ app.use(
 //cloudinary connection
 cloudinaryConnect();
 
+
 const post=require("./routes/postRoutes");
 app.use('/api/v1',post);
+
 
 app.listen(PORT, () => {
   console.log(`APP is listening at ${PORT}`);
