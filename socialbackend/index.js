@@ -1,5 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
+const {cloudinaryConnect } = require("./config/cloudinary");
+//const fileUpload = require("express-fileupload");
 const cookieParser = require("cookie-parser");
 
 dotenv.config();
@@ -19,6 +21,26 @@ app.get("/", (req, res) => {
   res.send("Server running 🚀");
 });
 
+const fileUpload = require("express-fileupload");
+
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+  })
+);
+
+//cloudinary connection
+cloudinaryConnect();
+
+
+const post=require("./routes/postRoutes");
+app.use('/api/v1',post);
+
+
+app.listen(PORT, () => {
+  console.log(`APP is listening at ${PORT}`);
+});
 const auth = require("./routes/authRoutes");
 app.use("/api/v1", auth);
 
