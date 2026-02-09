@@ -35,9 +35,9 @@ exports.signup = async (req,res) => {
             username,email,password:hashedPassword
         })
 
+
         return res.status(200).json({
             success:true,
-            token,
             message:'User Created Successfully',
         });
     }
@@ -82,7 +82,7 @@ exports.login = async (req,res) => {
         if(await bcrypt.compare(password,user.password)) {
             //password match
             let token = jwt.sign(payload, process.env.JWT_SECRET, {
-                expiresIn:"24h",
+                expiresIn:"30d",
             });
             user = user.toObject();
             user.token = token;
