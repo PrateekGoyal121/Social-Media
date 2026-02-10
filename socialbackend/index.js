@@ -33,11 +33,6 @@ app.use(
 //cloudinary connection
 cloudinaryConnect();
 
-
-const post=require("./routes/postRoutes");
-app.use('/api/v1',post);
-
-
 app.listen(PORT, () => {
   console.log(`APP is listening at ${PORT}`);
 });
@@ -47,6 +42,10 @@ app.use("/api/v1", auth);
 const user = require("./routes/userRoutes");
 app.use("/api/v1/user", user);
 
-app.listen(PORT, () => {
-  console.log(`APP is listening at ${PORT}`);
-});
+const post=require("./routes/postRoutes");
+app.use('/api/v1/post',post);
+
+const chat=require("./routes/chatRoutes");
+app.use("/api/v1/chat",chat)
+
+

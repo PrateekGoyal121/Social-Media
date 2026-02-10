@@ -156,6 +156,81 @@ const getUserPosts = async (req, res) => {
   }
 };
 
+// ADD COMMENT
+const addComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    const { postId } = req.params;
+
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment text is required",
+      });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
+    }
+
+    const comment = await Comment.create({
+      postId,
+      userId: req.user.id,
+      text,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Comment added successfully",
+      comment,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// DELETE COMMENT
+const deleteComment = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found",
+      });
+    }
+
+    if (comment.userId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this comment",
+      });
+    }
+
+    await Comment.findByIdAndDelete(commentId);
+
+    res.json({
+      success: true,
+      message: "Comment deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   createPost,
   getFeedPosts,
@@ -163,4 +238,6 @@ module.exports = {
   deletePost,
   getSinglePost,
   getUserPosts,
+  addComment,
+  deleteComment
 };
