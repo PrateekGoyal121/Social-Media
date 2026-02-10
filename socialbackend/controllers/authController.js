@@ -89,7 +89,7 @@ exports.login = async (req,res) => {
             user.password= undefined;
 
             const options = {
-                expires: new Date( Date.now() + 3000),
+                expires: new Date( Date.now() + 3000*24*1000),
                 httpOnly:true,
                  
             }

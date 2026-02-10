@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const cloudinary = require("cloudinary").v2;
+
 
 exports.getUserProfile = async (req, res) => {
   try {
@@ -27,30 +29,60 @@ exports.getUserProfile = async (req, res) => {
 
 exports.updateUserProfile = async (req, res) => {
   try {
-    const { username, bio, profilePic } = req.body;
+    console.log("BODY:", req.body);
+    console.log("FILES:", req.files);
+    
+    const { username, bio } = req.body;
+    let profilePic = "";
 
-    const user = await User.findById(req.user.id);
+    if (req.files && req.files.profilePic) {
+      const file = req.files.profilePic;
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      const supportedTypes = ["image/jpeg", "image/png", "image/jpg"];
+      if (!supportedTypes.includes(file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: "Only JPG, JPEG, PNG allowed",
+        });
+      }
+
+      const result = await cloudinary.uploader.upload(
+        file.tempFilePath,
+        {
+          folder: "profile_pics",
+          resource_type: "image",
+        }
+      );
+
+      profilePic = result.secure_url;
     }
 
-    user.username = username || user.username;
-    user.bio = bio || user.bio;
-    user.profilePic = profilePic || user.profilePic;
 
-    const updatedUser = await user.save();
+    // 🔄 Update user
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        ...(username && { username }),
+        ...(bio && { bio }),
+        ...(profilePic && { profilePic }),
+      },
+      { new: true }
+    ).select("-password");
 
     res.status(200).json({
-      _id: updatedUser._id,
-      username: updatedUser.username,
-      bio: updatedUser.bio,
-      profilePic: updatedUser.profilePic,
+      success: true,
+      message: "Profile updated successfully",
+      user,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
 
 /**
  * @desc    Follow or Unfollow user
