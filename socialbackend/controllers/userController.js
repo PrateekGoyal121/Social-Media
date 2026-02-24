@@ -1,5 +1,8 @@
 const User = require("../models/User");
+const Post = require("../models/Post");
 const cloudinary = require("cloudinary").v2;
+
+const { createNotification } = require("./notificationController");
 
 
 exports.getUserProfile = async (req, res) => {
@@ -121,6 +124,13 @@ exports.followUnfollowUser = async (req, res) => {
       await currentUser.save();
       await userToFollow.save();
 
+      // 🔔 CREATE NOTIFICATION (THIS WAS MISSING)
+      await createNotification({
+        sender: req.user.id,
+        receiver: userToFollow._id,
+        type: "follow",
+      });
+
       res.status(200).json({ message: "User followed" });
     }
   } catch (error) {
@@ -150,5 +160,45 @@ exports.getUserConnections = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.deleteUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Remove likes made by the user
+    await Post.updateMany(
+      { likes: userId },
+      { $pull: { likes: userId } }
+    );
+
+    // Delete user's posts
+    await Post.deleteMany({ author: userId });
+
+    // Remove user from followers/following
+    await User.updateMany(
+      { followers: userId },
+      { $pull: { followers: userId } }
+    );
+    await User.updateMany(
+      { following: userId },
+      { $pull: { following: userId } }
+    );
+
+    // Delete user
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "User and all related data deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete user",
+      error: error.message,
+    });
   }
 };

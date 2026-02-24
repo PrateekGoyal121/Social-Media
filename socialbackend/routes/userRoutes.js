@@ -1,12 +1,9 @@
 const express = require("express");
 
-const {getUserProfile,updateUserProfile,followUnfollowUser,getUserConnections} = require("../controllers/userController");
+const {getUserProfile,updateUserProfile,followUnfollowUser,getUserConnections, deleteUserProfile} = require("../controllers/userController");
 const {auth} = require("../middleware/authMiddleware");
 
 const router = express.Router();
-
-// Get user profile
-router.get("/:id",auth, getUserProfile);
 
 // Update logged-in user profile
 router.put("/profile",auth, updateUserProfile);
@@ -16,5 +13,10 @@ router.put("/follow/:id",auth, followUnfollowUser);
 
 // Get followers & following
 router.get("/connections/:id",auth, getUserConnections);
+
+router.delete("/delete", auth, deleteUserProfile);
+
+// Get user profile
+router.get("/:id",auth, getUserProfile);
 
 module.exports = router;
