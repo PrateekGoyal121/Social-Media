@@ -1,8 +1,10 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const {cloudinaryConnect } = require("./config/cloudinary");
-//const fileUpload = require("express-fileupload");
+const { cloudinaryConnect } = require("./config/cloudinary");
 const cookieParser = require("cookie-parser");
+const fileUpload = require("express-fileupload");
+const http = require("http");
+const { Server } = require("socket.io");
 
 dotenv.config();
 
@@ -15,13 +17,7 @@ connectDB();
 
 // middleware
 app.use(express.json());
-app.use(cookieParser());  
-
-app.get("/", (req, res) => {
-  res.send("Server running 🚀");
-});
-
-const fileUpload = require("express-fileupload");
+app.use(cookieParser());
 
 app.use(
   fileUpload({
@@ -30,22 +26,39 @@ app.use(
   })
 );
 
-//cloudinary connection
+// cloudinary
 cloudinaryConnect();
 
-app.listen(PORT, () => {
-  console.log(`APP is listening at ${PORT}`);
+// Create HTTP server (IMPORTANT for socket)
+const server = http.createServer(app);
+
+// Create socket server
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
-const auth = require("./routes/authRoutes");
-app.use("/api/v1", auth);
-
-const user = require("./routes/userRoutes");
-app.use("/api/v1/user", user);
-
-const post=require("./routes/postRoutes");
-app.use('/api/v1/post',post);
-
-const chat=require("./routes/chatRoutes");
-app.use("/api/v1/chat",chat)
 
 
+
+// routes
+const authRoutes = require("./routes/authRoutes");
+app.use("/api/v1", authRoutes);
+
+const userRoutes = require("./routes/userRoutes");
+app.use("/api/v1/user", userRoutes);
+
+const postRoutes = require("./routes/postRoutes");
+app.use("/api/v1/post", postRoutes);
+
+const chatRoutes = require("./routes/chatRoutes");
+app.use("/api/v1/chat", chatRoutes);
+
+// socket logic
+require("./sockets/chatSocket")(io);
+
+// start server
+server.listen(PORT, () => {
+  console.log(`🚀 Server + Socket running on port ${PORT}`);
+});

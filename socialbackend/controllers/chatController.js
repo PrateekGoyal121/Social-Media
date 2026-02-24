@@ -1,76 +1,91 @@
 const Message = require("../models/Message");
-const User = require("../models/User");
+const mongoose = require("mongoose");
 
+// ==============================
 // SEND MESSAGE
-const sendMessage = async (req, res) => {
+// ==============================
+exports.sendMessage = async (req, res) => {
   try {
     const { receiverId, text } = req.body;
 
     if (!receiverId || !text) {
       return res.status(400).json({
         success: false,
-        message: "ReceiverId and text are required",
+        message: "Receiver and text are required",
+      });
+    }
+
+    // 🔥 IMPORTANT FIX HERE
+    const senderId = req.user._id || req.user.id;
+
+    if (!senderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: User not found in token",
       });
     }
 
     const message = await Message.create({
-      sender: req.user.id,
+      sender: senderId,
       receiver: receiverId,
       text,
     });
 
-    res.status(201).json({
+    // Emit real-time message safely
+    const io = req.app.get("io");
+    if (io) {
+      io.to(receiverId).emit("receiveMessage", message);
+    }
+
+    return res.status(200).json({
       success: true,
-      message: "Message sent successfully",
-      data: message,
+      message,
     });
-  } catch (error) {
-    res.status(500).json({
+
+  } catch (err) {
+    console.log("SEND MESSAGE ERROR:", err);
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: err.message,
     });
   }
 };
 
+
+// ==============================
 // GET CHAT BETWEEN TWO USERS
-const getChat = async (req, res) => {
+// ==============================
+exports.getChat = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const otherUserId = req.params.userId;
+    const currentUserId = req.user.id;
 
     const messages = await Message.find({
       $or: [
-        { sender: req.user.id, receiver: userId },
-        { sender: userId, receiver: req.user.id },
+        { sender: currentUserId, receiver: otherUserId },
+        { sender: otherUserId, receiver: currentUserId },
       ],
-    })
-      .populate("sender", "username profilePic")
-      .populate("receiver", "username profilePic")
-      .sort({ createdAt: 1 });
+    }).sort({ createdAt: 1 });
 
-    res.json({
+    return res.status(200).json({
       success: true,
       messages,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (err) {
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Error fetching chat",
     });
   }
 };
 
 
+// ==============================
 // MARK MESSAGES AS READ
-const markAsRead = async (req, res) => {
+// ==============================
+exports.markAsRead = async (req, res) => {
   try {
     const { senderId } = req.body;
-
-    if (!senderId) {
-      return res.status(400).json({
-        success: false,
-        message: "SenderId is required",
-      });
-    }
 
     await Message.updateMany(
       {
@@ -78,67 +93,131 @@ const markAsRead = async (req, res) => {
         receiver: req.user.id,
         read: false,
       },
-      { read: true }
+      { $set: { read: true } }
     );
 
-    res.json({
+    return res.status(200).json({
       success: true,
       message: "Messages marked as read",
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (err) {
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Error updating messages",
     });
   }
 };
 
-// GET CHAT LIST (INBOX)
-const getChatList = async (req, res) => {
+
+// ==============================
+// GET CHAT LIST (Last message per user)
+// ==============================
+exports.getChatList = async (req, res) => {
   try {
-    const messages = await Message.find({
-      $or: [
-        { sender: req.user.id },
-        { receiver: req.user.id },
-      ],
-    })
-      .populate("sender", "username profilePic")
-      .populate("receiver", "username profilePic")
-      .sort({ createdAt: -1 });
+    const userId = new mongoose.Types.ObjectId(req.user.id);
 
-    const chatMap = new Map();
+    const chats = await Message.aggregate([
+      {
+        $match: {
+          $or: [{ sender: userId }, { receiver: userId }],
+        },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $eq: ["$sender", userId] },
+              "$receiver",
+              "$sender",
+            ],
+          },
+          lastMessage: { $first: "$$ROOT" },
+        },
+      },
+    ]);
 
-    messages.forEach((msg) => {
-      const otherUser =
-        msg.sender._id.toString() === req.user.id
-          ? msg.receiver
-          : msg.sender;
-
-      if (!chatMap.has(otherUser._id.toString())) {
-        chatMap.set(otherUser._id.toString(), {
-          user: otherUser,
-          lastMessage: msg,
-        });
-      }
-    });
-
-    res.json({
+    return res.status(200).json({
       success: true,
-      chats: Array.from(chatMap.values()),
+      chats,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (err) {
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Error fetching chat list",
     });
   }
 };
 
+// ==============================
+// DELETE CHAT (between two users)
+// ==============================
+exports.deleteChat = async (req, res) => {
+  try {
+    const { userId } = req.params; // other user's ID
+    const currentUserId = req.user.id;
 
-module.exports = {
-  sendMessage,
-  getChat,
-  markAsRead,
-  getChatList,
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    await Message.deleteMany({
+      $or: [
+        { sender: currentUserId, receiver: userId },
+        { sender: userId, receiver: currentUserId },
+      ],
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Chat deleted successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Error deleting chat",
+    });
+  }
 };
 
+// ==============================
+// MARK ALL AS READ (from ALL senders)
+// ==============================
+exports.markAllAsRead = async (req, res) => {
+  try {
+    const currentUserId = req.user._id || req.user.id;
+
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized user",
+      });
+    }
+
+    const result = await Message.updateMany(
+      {
+        receiver: currentUserId,
+        read: false,
+      },
+      { $set: { read: true } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All unread messages marked as read",
+      updatedCount: result.modifiedCount,
+    });
+
+  } catch (err) {
+    console.log("MARK ALL ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
