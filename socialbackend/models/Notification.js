@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const messageSchema = new mongoose.Schema(
+const notificationSchema = new mongoose.Schema(
   {
     sender: {
       type: mongoose.Schema.Types.ObjectId,
@@ -12,20 +12,24 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    text: {
+    type: {
       type: String,
+      enum: ["like", "comment", "follow"],
       required: true,
-      trim: true,
-      maxlength: 2000,
     },
-    read: {
+    post: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Post",
+      default: null,
+    },
+    isRead: {
       type: Boolean,
       default: false,
     },
   },
   {
-    timestamps: true, 
+    timestamps: true, // adds createdAt & updatedAt
   }
 );
 
-module.exports=mongoose.model("Message", messageSchema);
+module.exports = mongoose.model("Notification", notificationSchema);
