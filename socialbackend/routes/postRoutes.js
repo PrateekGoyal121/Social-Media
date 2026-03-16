@@ -8,6 +8,8 @@ const {
   getUserPosts,
   addComment,
   deleteComment,
+  getAllPosts,
+  getPostComments,
 } = require("../controllers/postController");
 
 const { auth } = require("../middleware/authMiddleware");
@@ -24,5 +26,7 @@ router.put("/:postId/like", auth, toggleLike);
 router.delete("/:postId", auth, deletePost);
 router.post("/comment/:postId",auth,addComment);
 router.delete("/delete/:commentId", auth, deleteComment);
+router.get("/feed/all",auth,getAllPosts);
+router.get("/:postId/getcomments",auth, getPostComments);
 
 module.exports = router;

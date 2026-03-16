@@ -1,7 +1,7 @@
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Comment = require("../models/Comment");
-const {cloudinary} = require("../config/cloudinary");
+const {cloudinary} = require("../Config/cloudinary");
 
 const { createNotification } = require("./notificationController");
 
@@ -248,6 +248,61 @@ const deleteComment = async (req, res) => {
   }
 };
 
+const getAllPosts = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10;
+
+    const posts = await Post.find({})
+      .populate("author", "username profilePic")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    res.json({
+      success: true,
+      page,
+      posts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// GET ALL COMMENTS FOR A POST
+const getPostComments = async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    // Check if post exists
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
+    }
+
+    const comments = await Comment.find({ postId })
+      .populate("userId", "username profilePic")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: comments.length,
+      comments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 
 module.exports = {
   createPost,
@@ -257,5 +312,7 @@ module.exports = {
   getSinglePost,
   getUserPosts,
   addComment,
-  deleteComment
+  deleteComment,
+  getAllPosts,
+  getPostComments,
 };

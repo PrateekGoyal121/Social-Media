@@ -7,6 +7,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const notificationSocket = require("./sockets/notificationSocket");
 const chatSocket = require("./sockets/chatSocket");
+const cors = require("cors");
 
 dotenv.config();
 
@@ -19,7 +20,11 @@ connectDB();
 
 // middleware
 app.use(express.json());
-app.use(cookieParser());  
+app.use(cookieParser()); 
+app.use(cors({
+  origin: "http://localhost:3001",
+  credentials: true
+})); 
 
 app.use(
   fileUpload({
