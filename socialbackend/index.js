@@ -5,8 +5,9 @@ const fileUpload = require("express-fileupload");
 const cookieParser = require("cookie-parser");
 const http = require("http");
 const { Server } = require("socket.io");
-const notificationSocket = require("./sockets/notificationSocket");
+const {notificationSocket} = require("./sockets/notificationSocket");
 const chatSocket = require("./sockets/chatSocket");
+const cors = require("cors");
 
 dotenv.config();
 
@@ -14,12 +15,16 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // DB connect
-const connectDB = require("./Config/db");
+const connectDB = require("./config/db");
 connectDB();
 
 // middleware
 app.use(express.json());
-app.use(cookieParser());  
+app.use(cookieParser()); 
+app.use(cors({
+  origin: "http://localhost:3001",
+  credentials: true
+})); 
 
 app.use(
   fileUpload({
@@ -35,8 +40,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "http://localhost:3001",
     methods: ["GET", "POST"],
+    credentials:true,
   },
 });
 

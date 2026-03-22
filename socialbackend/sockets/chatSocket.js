@@ -1,58 +1,43 @@
-const jwt = require("jsonwebtoken");
-
 const chatSocket = (io) => {
-  // Store online users
+  // Track online users: userId -> Set of socketIds (multi-tab support)
   const onlineUsers = new Map();
 
+  const getOnlineList = () => Array.from(onlineUsers.keys());
+
   io.on("connection", (socket) => {
-    console.log("🔌 User connected:", socket.id);
+    console.log("🔌 connected:", socket.id);
 
-    /*
-      FRONTEND MUST SEND TOKEN AFTER CONNECTING
-      socket.emit("authenticate", token)
-    */
-    socket.on("authenticate", (token) => {
-      try {
-        if (!token) return;
+    socket.on("join", (userId) => {
+      if (!userId) return;
+      const id = userId.toString();
+      socket.join(id);
+      socket._userId = id;
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+      // track online
+      if (!onlineUsers.has(id)) onlineUsers.set(id, new Set());
+      onlineUsers.get(id).add(socket.id);
 
-        // Store user socket
-        onlineUsers.set(userId, socket.id);
-
-        // Join private room
-        socket.join(userId);
-
-        console.log("✅ User authenticated:", userId);
-      } catch (err) {
-        console.log("❌ Socket authentication failed");
-      }
+      // broadcast updated online list to everyone
+      io.emit("onlineUsers", getOnlineList());
+      console.log("✅ joined room:", id, "| online:", getOnlineList());
     });
 
-    // Handle real-time message (optional)
-    socket.on("sendMessage", ({ senderId, receiverId, text }) => {
-      if (!receiverId) return;
-
-      io.to(receiverId).emit("receiveMessage", {
-        senderId,
-        text,
-        createdAt: new Date(),
-      });
+    socket.on("typing", ({ receiverId, senderId }) => {
+      if (!receiverId || !senderId) return;
+      socket.to(receiverId.toString()).emit("typing", { senderId: senderId.toString() });
     });
 
     socket.on("disconnect", () => {
-      console.log("❌ User disconnected:", socket.id);
-
-      // Remove user from online map
-      for (let [userId, socketId] of onlineUsers.entries()) {
-        if (socketId === socket.id) {
-          onlineUsers.delete(userId);
-          break;
-        }
+      const id = socket._userId;
+      if (id && onlineUsers.has(id)) {
+        onlineUsers.get(id).delete(socket.id);
+        if (onlineUsers.get(id).size === 0) onlineUsers.delete(id);
       }
+      // broadcast updated online list
+      io.emit("onlineUsers", getOnlineList());
+      console.log("❌ disconnected:", socket.id, "| online:", getOnlineList());
     });
   });
 };
 
-module.exports=chatSocket;
+module.exports = chatSocket;
