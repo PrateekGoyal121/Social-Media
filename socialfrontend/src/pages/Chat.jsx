@@ -30,20 +30,18 @@ export default function Chat() {
   const [onlineUsers,  setOnlineUsers]  = useState([]);
   const [isDesktop,    setIsDesktop]    = useState(window.innerWidth >= 768);
 
-  // ── Refs (never go stale inside socket callbacks) ──────────────────
-  const myIdRef        = useRef(currentUserId);
-  const chatIdRef      = useRef(null);          // currently open chat partner ID
-  const typingTimer    = useRef(null);
-  const myTypingTimer  = useRef(null);
-  const messagesRef    = useRef([]);            // mirror of messages state for callbacks
+  const myIdRef       = useRef(currentUserId);
+  const chatIdRef     = useRef(null);
+  const typingTimer   = useRef(null);
+  const myTypingTimer = useRef(null);
+  const messagesRef   = useRef([]);
+  const selectedUserRef =useRef(null);
 
-  // Keep refs in sync
   myIdRef.current = currentUserId;
 
-  // Keep messagesRef in sync with messages state
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
 
   // ── Resize listener ────────────────────────────────────────────────
   useEffect(() => {
@@ -58,52 +56,33 @@ export default function Chat() {
 
   useEffect(() => { refreshList(); }, [refreshList]);
 
-  // ── Socket setup (runs once) ───────────────────────────────────────
+  // ── Socket listeners only — NO connect/join here (App.js handles that) ──
   useEffect(() => {
-    if (!socket.connected) socket.connect();
-
-    const onConnect = () => {
-      const uid = myIdRef.current;
-      if (uid) {
-        socket.emit("join", uid);
-        console.log("✅ Socket joined:", uid);
-      }
-    };
-
     const onReceiveMessage = (msg) => {
-      const myId   = myIdRef.current;
-      const chatId = chatIdRef.current;
+      const myId = myIdRef.current;
+  const selected = selectedUserRef.current;
 
-      if (!myId || !msg) return;
+  if (!myId || !msg || !selected) return;
 
-      // Normalise IDs — backend may send ObjectId objects or strings
-      const sId = msg.sender?._id?.toString()   ?? msg.sender?.toString()   ?? "";
-      const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
+  const sId = msg.sender?._id?.toString() ?? msg.sender?.toString() ?? "";
+  const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
 
-      console.log("📨 receiveMessage", { sId, rId, chatId, myId });
+  const isOpenChat =
+    (sId === selected._id?.toString() && rId === myId) ||
+    (sId === myId && rId === selected._id?.toString());
 
-      // Check if this message belongs to the currently open conversation
-      const isOpenChat =
-        chatId &&
-        ((sId === chatId && rId === myId) ||
-         (sId === myId   && rId === chatId));
+  if (isOpenChat) {
+    setMessages((prev) => {
+      const id = msg._id?.toString();
+      if (prev.some((m) => m._id?.toString() === id)) return prev;
+      return [...prev, msg];
+    });
+  }
 
-      if (isOpenChat) {
-        setMessages((prev) => {
-          // Deduplicate by _id
-          const id = msg._id?.toString();
-          if (prev.some((m) => m._id?.toString() === id)) return prev;
-          return [...prev, msg];
-        });
-        setOtherTyping(false);
-      }
-
-      // Always update sidebar last-message preview
       const otherUserId = sId === myId ? rId : sId;
       setChatList((prev) => {
         const idx = prev.findIndex((c) => c._id?.toString() === otherUserId);
         if (idx === -1) {
-          // New conversation — refresh the whole list
           refreshList();
           return prev;
         }
@@ -123,19 +102,11 @@ export default function Chat() {
 
     const onOnlineUsers = (ids) => setOnlineUsers(ids.map(String));
 
-    // Register listeners
-    socket.on("connect",        onConnect);
     socket.on("receiveMessage", onReceiveMessage);
     socket.on("typing",         onTyping);
     socket.on("onlineUsers",    onOnlineUsers);
 
-    // If already connected when this effect runs, join immediately
-    if (socket.connected && myIdRef.current) {
-      socket.emit("join", myIdRef.current);
-    }
-
     return () => {
-      socket.off("connect",        onConnect);
       socket.off("receiveMessage", onReceiveMessage);
       socket.off("typing",         onTyping);
       socket.off("onlineUsers",    onOnlineUsers);
@@ -144,20 +115,12 @@ export default function Chat() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Re-join socket whenever the authenticated user changes ─────────
-  useEffect(() => {
-    if (currentUserId && socket.connected) {
-      socket.emit("join", currentUserId);
-    }
-  }, [currentUserId]);
-
   // ── Select a conversation ──────────────────────────────────────────
   const handleSelect = useCallback((chat) => {
     if (!chat?._id) return;
     const newChatId = chat._id.toString();
     if (newChatId === chatIdRef.current) return;
 
-    // Update the ref FIRST so the socket callback sees the new ID immediately
     chatIdRef.current = newChatId;
 
     setSelectedUser(chat);
@@ -171,7 +134,6 @@ export default function Chat() {
       if (!r?.success) return;
       const fetched = r.messages ?? [];
       setMessages((prev) => {
-        // Keep any live messages that arrived via socket after we cleared
         const fetchedIds = new Set(fetched.map((m) => m._id?.toString()));
         const live       = prev.filter((m) => !fetchedIds.has(m._id?.toString()));
         return [...fetched, ...live];
@@ -180,9 +142,8 @@ export default function Chat() {
     });
   }, [isDesktop]);
 
-  // ── Send a text message ────────────────────────────────────────────
+  // ── Send text ──────────────────────────────────────────────────────
   const handleSend = useCallback(async (overrideText) => {
-    // Guard against React synthetic events being passed accidentally
     if (overrideText && typeof overrideText === "object" && overrideText.preventDefault) {
       overrideText = undefined;
     }
@@ -192,20 +153,16 @@ export default function Chat() {
 
     if (!payload || !selectedUser) return;
 
-    // Optimistically clear the input
     if (overrideText === undefined) setText("");
 
-    const res = await sendMessage({
-      receiverId: selectedUser._id,
-      text: payload,
-    });
+    const res = await sendMessage({ receiverId: selectedUser._id, text: payload });
 
     if (res?.success) {
-      setMessages((prev) => {
-        const id = res.message._id?.toString();
-        if (prev.some((m) => m._id?.toString() === id)) return prev;
-        return [...prev, res.message];
-      });
+      // setMessages((prev) => {
+      //   const id = res.message._id?.toString();
+      //   if (prev.some((m) => m._id?.toString() === id)) return prev;
+      //   return [...prev, res.message];
+      // });
       setChatList((prev) =>
         prev.map((c) =>
           c._id?.toString() === selectedUser._id?.toString()
@@ -214,12 +171,11 @@ export default function Chat() {
         )
       );
     } else {
-      // Restore text on failure
       if (overrideText === undefined) setText(payload);
     }
   }, [text, selectedUser]);
 
-  // ── Send an image message ──────────────────────────────────────────
+  // ── Send image ─────────────────────────────────────────────────────
   const handleImageSend = useCallback(async (file, caption = "") => {
     if (!file || !selectedUser) return;
     const res = await sendImageMessage({ receiverId: selectedUser._id, file, caption });
@@ -243,30 +199,26 @@ export default function Chat() {
   const handleTextChange = useCallback((newVal) => {
     setText(newVal);
     if (!selectedUser || !socket.connected) return;
-    // Throttle: only emit once per 1.5 s
     if (myTypingTimer.current) return;
     socket.emit("typing", {
       receiverId: selectedUser._id?.toString(),
-      senderId:   myIdRef.current,         // always fresh via ref
+      senderId:   myIdRef.current,
     });
     myTypingTimer.current = setTimeout(() => {
       myTypingTimer.current = null;
     }, 1500);
   }, [selectedUser]);
 
-  // ── Keyboard shortcut ──────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }, [handleSend]);
 
-  // ── Reactions ──────────────────────────────────────────────────────
   const handleReact = useCallback((msgId, emoji) =>
     setReactions((prev) => ({
       ...prev,
       [msgId]: prev[msgId] === emoji ? undefined : emoji,
     })), []);
 
-  // ── Profile navigation ─────────────────────────────────────────────
   const handleProfileClick = useCallback((id) => {
     if (id) navigate(`/profile/${id}`);
   }, [navigate]);
@@ -281,15 +233,7 @@ export default function Chat() {
 
   return (
     <div className="fixed top-0 left-0 right-0 bottom-14 md:left-20 md:bottom-0 flex bg-black overflow-hidden">
-
-      {/* ── SIDEBAR ── */}
-      <div
-        className={`
-          ${showSidebar ? "flex" : "hidden"}
-          flex-col h-full overflow-hidden shrink-0
-          w-full md:w-[360px] md:border-r md:border-[#1a1a1a]
-        `}
-      >
+      <div className={`${showSidebar ? "flex" : "hidden"} flex-col h-full overflow-hidden shrink-0 w-full md:w-[360px] md:border-r md:border-[#1a1a1a]`}>
         <ChatSidebar
           chatList={chatList}
           selectedUser={selectedUser}
@@ -301,13 +245,7 @@ export default function Chat() {
         />
       </div>
 
-      {/* ── CHAT CONTENT ── */}
-      <div
-        className={`
-          ${showChat ? "flex" : "hidden"}
-          flex-col h-full overflow-hidden flex-1 min-w-0
-        `}
-      >
+      <div className={`${showChat ? "flex" : "hidden"} flex-col h-full overflow-hidden flex-1 min-w-0`}>
         {selectedUser ? (
           <>
             <ChatHeader
@@ -350,5 +288,3 @@ export default function Chat() {
     </div>
   );
 }
-
-

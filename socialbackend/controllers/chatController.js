@@ -26,8 +26,10 @@ exports.sendMessage = async (req, res) => {
     const message  = plain(doc);
 
     const io = req.app.get("io");
-    if (io) io.to(receiverId.toString()).emit("receiveMessage", message);
-
+    if (io){
+      io.to(receiverId.toString()).emit("receiveMessage", message);
+      io.to(senderId.toString()).emit("receiveMessage", message);
+    } 
     return res.status(200).json({ success: true, message });
   } catch (err) {
     console.error("sendMessage:", err);
@@ -64,8 +66,10 @@ exports.sendImageMessage = async (req, res) => {
     const message = plain(doc);
 
     const io = req.app.get("io");
-    if (io) io.to(receiverId.toString()).emit("receiveMessage", message);
-
+    if (io){
+      io.to(receiverId.toString()).emit("receiveMessage", message);
+      io.to(senderId.toString()).emit("receiveMessage", message);
+    } 
     return res.status(200).json({ success: true, message });
   } catch (err) {
     console.error("sendImageMessage:", err);

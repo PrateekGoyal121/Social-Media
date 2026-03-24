@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getNotifications,
@@ -6,7 +6,6 @@ import {
   markAllAsRead,
   deleteNotification,
 } from "../services/notificationService";
-import { AuthContext } from "../context/AuthContext";
 import socket from "../socket";
 import { FaHeart, FaComment, FaUserPlus, FaTrash } from "react-icons/fa";
 import { toast } from "react-hot-toast";
@@ -26,20 +25,19 @@ const typeText = (type) => {
 
 const timeAgo = (date) => {
   const diff = Math.floor((Date.now() - new Date(date)) / 1000);
-  if (diff < 60)        return `${diff}s`;
-  if (diff < 3600)      return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400)     return `${Math.floor(diff / 3600)}h`;
+  if (diff < 60)    return `${diff}s`;
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
   return `${Math.floor(diff / 86400)}d`;
 };
 
 function Notifications() {
-  const { user }  = useContext(AuthContext);
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(true);
 
-  // ── fetch all on mount ─────────────────────────────────────────────────────
+  // ── Fetch on mount ────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       try {
@@ -54,45 +52,37 @@ function Notifications() {
     load();
   }, []);
 
-  // ── shared socket — real-time ──────────────────────────────────────────────
+  // ── Real-time listener only (App.js handles connect + join) ───────
   useEffect(() => {
-  if (!user?._id) return;
+    const handleNew = (notification) => {
+      setNotifications((prev) => {
+        if (prev.some((n) => n._id?.toString() === notification._id?.toString())) return prev;
+        return [notification, ...prev];
+      });
+      toast(`🔔 ${notification.sender?.username} ${typeText(notification.type)}`);
+    };
 
-  socket.emit("join", user._id);
+    socket.on("newNotification", handleNew);
+    return () => socket.off("newNotification", handleNew);
+  }, []);
 
-  const handleNew = (notification) => {
-    setNotifications((prev) => [notification, ...prev]);
-    toast(`🔔 ${notification.sender?.username} ${typeText(notification.type)}`);
-  };
-
-  socket.on("newNotification", handleNew);
-
-  return () => socket.off("newNotification", handleNew);
-}, [user?._id]);
-
-  // ── mark single as read ────────────────────────────────────────────────────
+  // ── Mark single read ──────────────────────────────────────────────
   const handleClick = async (n) => {
     if (!n.isRead) {
       try {
         await markAsRead(n._id);
         setNotifications((prev) =>
-          prev.map((item) =>
-            item._id === n._id ? { ...item, isRead: true } : item
-          )
+          prev.map((item) => item._id === n._id ? { ...item, isRead: true } : item)
         );
       } catch {
         toast.error("Failed to mark as read");
       }
     }
-
-    if (n.type === "follow") {
-      navigate(`/profile/${n.sender._id}`);
-    } else if (n.post) {
-      navigate(`/profile/${n.sender._id}`);
-    }
+    if (n.type === "follow") navigate(`/profile/${n.sender._id}`);
+    else if (n.post)         navigate(`/profile/${n.sender._id}`);
   };
 
-  // ── mark all read ──────────────────────────────────────────────────────────
+  // ── Mark all read ─────────────────────────────────────────────────
   const handleMarkAll = async () => {
     try {
       await markAllAsRead();
@@ -103,7 +93,7 @@ function Notifications() {
     }
   };
 
-  // ── delete ─────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     try {
@@ -117,11 +107,8 @@ function Notifications() {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
-
-      {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-bold text-gray-900">Notifications</h2>
@@ -131,22 +118,15 @@ function Notifications() {
             </span>
           )}
         </div>
-
         {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAll}
-            className="text-xs text-blue-500 font-semibold hover:underline"
-          >
+          <button onClick={handleMarkAll} className="text-xs text-blue-500 font-semibold hover:underline">
             Mark all as read
           </button>
         )}
       </div>
 
-      {/* BODY */}
       {loading ? (
-        <div className="flex justify-center mt-20">
-          <Loader />
-        </div>
+        <div className="flex justify-center mt-20"><Loader /></div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center mt-24 gap-3">
           <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
@@ -161,12 +141,9 @@ function Notifications() {
               key={n._id}
               onClick={() => handleClick(n)}
               className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition group ${
-                n.isRead
-                  ? "bg-white hover:bg-gray-50"
-                  : "bg-blue-50 hover:bg-blue-100"
+                n.isRead ? "bg-white hover:bg-gray-50" : "bg-blue-50 hover:bg-blue-100"
               }`}
             >
-              {/* Avatar + type icon */}
               <div className="relative flex-shrink-0">
                 <img
                   src={n.sender?.profilePic || "/avatar.png"}
@@ -177,24 +154,14 @@ function Notifications() {
                   {typeIcon(n.type)}
                 </div>
               </div>
-
-              {/* Text + time */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800">
                   <span className="font-semibold">{n.sender?.username}</span>
                   {" "}{typeText(n.type)}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {timeAgo(n.createdAt)}
-                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.createdAt)}</p>
               </div>
-
-              {/* Unread dot */}
-              {!n.isRead && (
-                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-              )}
-
-              {/* Delete on hover */}
+              {!n.isRead && <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
               <button
                 onClick={(e) => handleDelete(e, n._id)}
                 className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition flex-shrink-0"
@@ -205,7 +172,6 @@ function Notifications() {
           ))}
         </div>
       )}
-
     </div>
   );
 }

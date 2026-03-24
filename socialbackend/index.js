@@ -5,9 +5,10 @@ const fileUpload = require("express-fileupload");
 const cookieParser = require("cookie-parser");
 const http = require("http");
 const { Server } = require("socket.io");
-const {notificationSocket} = require("./sockets/notificationSocket");
-const chatSocket = require("./sockets/chatSocket");
+// const {notificationSocket} = require("./sockets/notificationSocket");
+// const chatSocket = require("./sockets/chatSocket");
 const cors = require("cors");
+const {initSocket}=require("./sockets/socket");
 
 dotenv.config();
 
@@ -46,8 +47,9 @@ const io = new Server(server, {
   },
 });
 
-notificationSocket(io);
-chatSocket(io);
+// notificationSocket(io);
+// chatSocket(io);
+initSocket(io);
 
 // make socket accessible in controllers
 app.set("io", io);
