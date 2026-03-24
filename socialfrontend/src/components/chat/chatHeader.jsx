@@ -1,5 +1,5 @@
 import ChatAvatar from "./chatAvatar";
-import { BackIcon, PhoneIcon, VideoIcon, InfoIcon } from "./chatIcon";
+import { BackIcon} from "./chatIcon";
 
 export default function ChatHeader({ selectedUser, isMobile, onBack, onProfileClick, isOnline }) {
   if (!selectedUser) return null;
@@ -39,17 +39,6 @@ export default function ChatHeader({ selectedUser, isMobile, onBack, onProfileCl
         </button>
       </div>
 
-      <div className="flex items-center gap-5">
-        <button type="button" className="text-neutral-400 hover:text-white transition-colors" title="Call">
-          <PhoneIcon />
-        </button>
-        <button type="button" className="text-neutral-400 hover:text-white transition-colors" title="Video">
-          <VideoIcon />
-        </button>
-        <button type="button" className="text-neutral-400 hover:text-white transition-colors" title="Info">
-          <InfoIcon />
-        </button>
-      </div>
     </div>
   );
 }

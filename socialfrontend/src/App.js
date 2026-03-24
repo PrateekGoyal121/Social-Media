@@ -19,12 +19,20 @@ function App() {
   useEffect(() => {
     if (!user?._id) return;
 
+    const joinRoom = () => {
+    console.log("emitting join for", user._id);
+    socket.emit("join", user._id.toString());
+  };
+
     if (!socket.connected) socket.connect();
 
-    const joinRoom = () => socket.emit("join", user._id.toString());
+    // const joinRoom = () => socket.emit("join", user._id.toString());
 
+    // if (socket.connected) joinRoom();
+    // else socket.once("connect", joinRoom);
+
+    socket.on("connect",joinRoom);
     if (socket.connected) joinRoom();
-    else socket.once("connect", joinRoom);
 
     return () => {
       socket.off("connect", joinRoom);
@@ -42,9 +50,9 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex  bg-black">
       <Sidebar />
-      <div className="flex-1 md:ml-20 pb-20 md:pb-0 p-6">
+      <div className="flex-1 md:ml-20 pb-20 md:pb-0 overflow-auto">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/profile/:id" element={<Profile />} />

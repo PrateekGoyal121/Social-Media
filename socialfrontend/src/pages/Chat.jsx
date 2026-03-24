@@ -43,6 +43,10 @@ export default function Chat() {
     selectedUserRef.current = selectedUser;
   }, [selectedUser]);
 
+  useEffect(() => {
+  console.log("onlineUsers state:", onlineUsers);
+}, [onlineUsers]);
+
   // ── Resize listener ────────────────────────────────────────────────
   useEffect(() => {
     const fn = () => setIsDesktop(window.innerWidth >= 768);
@@ -62,12 +66,13 @@ export default function Chat() {
       const myId = myIdRef.current;
   const selected = selectedUserRef.current;
 
-  if (!myId || !msg || !selected) return;
+  if (!myId || !msg ) return;
 
   const sId = msg.sender?._id?.toString() ?? msg.sender?.toString() ?? "";
   const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
 
-  const isOpenChat =
+  if(selected){
+    const isOpenChat =
     (sId === selected._id?.toString() && rId === myId) ||
     (sId === myId && rId === selected._id?.toString());
 
@@ -77,6 +82,7 @@ export default function Chat() {
       if (prev.some((m) => m._id?.toString() === id)) return prev;
       return [...prev, msg];
     });
+  }
   }
 
       const otherUserId = sId === myId ? rId : sId;
@@ -100,11 +106,15 @@ export default function Chat() {
       }
     };
 
-    const onOnlineUsers = (ids) => setOnlineUsers(ids.map(String));
+    const onOnlineUsers = (ids) => {
+    console.log("onlineUsers received:", ids); // confirm it fires
+    setOnlineUsers(ids.map(String));
+  };
 
     socket.on("receiveMessage", onReceiveMessage);
     socket.on("typing",         onTyping);
     socket.on("onlineUsers",    onOnlineUsers);
+    socket.emit("getOnlineUsers");
 
     return () => {
       socket.off("receiveMessage", onReceiveMessage);
@@ -158,11 +168,11 @@ export default function Chat() {
     const res = await sendMessage({ receiverId: selectedUser._id, text: payload });
 
     if (res?.success) {
-      // setMessages((prev) => {
-      //   const id = res.message._id?.toString();
-      //   if (prev.some((m) => m._id?.toString() === id)) return prev;
-      //   return [...prev, res.message];
-      // });
+      setMessages((prev) => {
+        const id = res.message._id?.toString();
+        if (prev.some((m) => m._id?.toString() === id)) return prev;
+        return [...prev, res.message];
+      });
       setChatList((prev) =>
         prev.map((c) =>
           c._id?.toString() === selectedUser._id?.toString()

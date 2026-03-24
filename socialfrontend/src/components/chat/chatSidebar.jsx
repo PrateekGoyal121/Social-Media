@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ChatAvatar from "./chatAvatar";
-import { SearchIcon, ComposeIcon } from "./chatIcon";
+import { SearchIcon} from "./chatIcon";
 
 const isImgUrl = (t = "") =>
   t.startsWith("https://res.cloudinary.com") ||
@@ -64,9 +64,6 @@ export default function ChatSidebar({
               size="sm"
             />
             <span className="font-bold text-[15px] text-white">{currentUser?.username || ""}</span>
-          </button>
-          <button type="button" className="text-neutral-400 hover:text-white transition-colors">
-            <ComposeIcon />
           </button>
         </div>
 

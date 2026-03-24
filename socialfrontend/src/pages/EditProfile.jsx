@@ -60,98 +60,91 @@ function EditProfile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
-      <Toaster position="top-right" />
+  <div className="min-h-screen bg-[#0b0b0c] flex items-center justify-center p-6 text-gray-100">
+    <Toaster position="top-right" />
 
-      <div className="w-full max-w-lg bg-white shadow-xl rounded-2xl p-8">
+    <div className="w-full max-w-lg bg-[#121214] border border-gray-800 shadow-2xl rounded-2xl p-8">
 
-        {/* 🔷 Header */}
-        <h2 className="text-3xl font-bold text-center mb-8">
-          Edit Profile
-        </h2>
+      {/* 🔷 Header */}
+      <h2 className="text-3xl font-bold text-center mb-8">
+        Edit Profile
+      </h2>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
+      <form onSubmit={handleSubmit} className="space-y-6">
 
-          {/* 📷 Profile Picture */}
-          <div className="flex flex-col items-center gap-3">
+        {/* 📷 Profile Picture */}
+        <div className="flex flex-col items-center gap-3">
 
-            <div className="relative">
+          <div className="relative">
 
-              <img
-                src={preview}
-                alt=""
-                className="w-32 h-32 rounded-full object-cover border-4 border-blue-500 shadow"
+            <img
+              src={preview}
+              alt=""
+              className="w-32 h-32 rounded-full object-cover border-4 border-blue-500 shadow-lg"
+            />
+
+            {/* Camera Icon */}
+            <label className="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full cursor-pointer shadow hover:bg-blue-700 transition">
+              <FaCamera />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
               />
-
-              {/* Camera Icon Overlay */}
-              <label className="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full cursor-pointer shadow hover:bg-blue-700 transition">
-                <FaCamera />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
-            </div>
-
-            <p className="text-sm text-gray-500">
-              Click camera icon to change photo
-            </p>
-          </div>
-
-          {/* 👤 Username */}
-          <div>
-            <label className="flex items-center gap-2 font-medium mb-1">
-              <FaUser className="text-blue-600" />
-              Username
             </label>
-
-            <input
-              type="text"
-              value={username}
-              onChange={(e) =>
-                setUsername(e.target.value)
-              }
-              placeholder="Enter username"
-              className="w-full border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
           </div>
 
-          {/* 📝 Bio */}
-          <div>
-            <label className="flex items-center gap-2 font-medium mb-1">
-              <FaInfoCircle className="text-blue-600" />
-              Bio
-            </label>
+          <p className="text-sm text-gray-400">
+            Click camera icon to change photo
+          </p>
+        </div>
 
-            <textarea
-              value={bio}
-              onChange={(e) =>
-                setBio(e.target.value)
-              }
-              placeholder="Tell something about yourself"
-              rows="4"
-              className="w-full border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+        {/* 👤 Username */}
+        <div>
+          <label className="flex items-center gap-2 font-medium mb-1 text-gray-200">
+            <FaUser className="text-blue-500" />
+            Username
+          </label>
 
-          {/* 💾 Save Button */}
-          <button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 transition text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow"
-          >
-            <FaSave />
-            Save Changes
-          </button>
-        </form>
-      </div>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter username"
+            className="w-full bg-[#1a1a1d] border border-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+            required
+          />
+        </div>
+
+        {/* 📝 Bio */}
+        <div>
+          <label className="flex items-center gap-2 font-medium mb-1 text-gray-200">
+            <FaInfoCircle className="text-blue-500" />
+            Bio
+          </label>
+
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tell something about yourself"
+            rows="4"
+            className="w-full bg-[#1a1a1d] border border-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+          />
+        </div>
+
+        {/* 💾 Save Button */}
+        <button
+          type="submit"
+          className="w-full bg-blue-600 hover:bg-blue-700 transition text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow-lg active:scale-95"
+        >
+          <FaSave />
+          Save Changes
+        </button>
+      </form>
     </div>
-  );
+  </div>
+);
 }
 
 export default EditProfile;

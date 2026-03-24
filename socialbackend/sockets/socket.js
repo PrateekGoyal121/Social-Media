@@ -24,6 +24,10 @@ const initSocket = (io) => {
       console.log("✅ joined room:", id);
     });
 
+    socket.on("getOnlineUsers", () => {
+  socket.emit("onlineUsers", getOnlineList());
+});
+
     socket.on("typing", ({ receiverId, senderId }) => {
       if (!receiverId || !senderId) return;
       socket.to(receiverId.toString()).emit("typing", { senderId: senderId.toString() });

@@ -1,3 +1,10 @@
 @tailwind base;
-@tailwind componenets;
+@tailwind components;
 @tailwind utilities;
+
+/* 🌙 Global Dark Background Fix */
+html, body, #root {
+  background-color: #000;
+  height: 100%;
+  margin: 0;
+}

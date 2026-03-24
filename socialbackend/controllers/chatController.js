@@ -27,6 +27,9 @@ exports.sendMessage = async (req, res) => {
 
     const io = req.app.get("io");
     if (io){
+      console.log("emitting to sender:", senderId.toString());
+      console.log("emitting to receiver:", receiverId.toString());
+      console.log("io rooms:", [...io.sockets.adapter.rooms.keys()]);
       io.to(receiverId.toString()).emit("receiveMessage", message);
       io.to(senderId.toString()).emit("receiveMessage", message);
     } 

@@ -108,63 +108,92 @@ function Notifications() {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6">
+  <div className="bg-black min-h-screen">
+    <div className="max-w-lg mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-bold text-gray-900">Notifications</h2>
+          <h2 className="text-lg font-bold text-white">Notifications</h2>
+
           {unreadCount > 0 && (
             <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {unreadCount}
             </span>
           )}
         </div>
+
         {unreadCount > 0 && (
-          <button onClick={handleMarkAll} className="text-xs text-blue-500 font-semibold hover:underline">
+          <button
+            onClick={handleMarkAll}
+            className="text-xs text-[#4da6ff] font-semibold hover:underline"
+          >
             Mark all as read
           </button>
         )}
       </div>
 
+      {/* CONTENT */}
       {loading ? (
-        <div className="flex justify-center mt-20"><Loader /></div>
+        <div className="flex justify-center mt-20">
+          <Loader />
+        </div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center mt-24 gap-3">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-            <FaHeart size={24} className="text-gray-300" />
+          <div className="w-16 h-16 rounded-full bg-[#0a0a0a] border border-[#1a1a1a] flex items-center justify-center">
+            <FaHeart size={24} className="text-[#333]" />
           </div>
-          <p className="text-gray-400 text-sm">No notifications yet</p>
+          <p className="text-[#666] text-sm">No notifications yet</p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2">
+
           {notifications.map((n) => (
             <div
               key={n._id}
               onClick={() => handleClick(n)}
-              className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition group ${
-                n.isRead ? "bg-white hover:bg-gray-50" : "bg-blue-50 hover:bg-blue-100"
+              className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition group border ${
+                n.isRead
+                  ? "bg-[#0a0a0a] border-[#1a1a1a] hover:border-[#262626]"
+                  : "bg-[#111] border-[#1f3b57] hover:border-[#2f5f8f]"
               }`}
             >
+              {/* PROFILE IMAGE */}
               <div className="relative flex-shrink-0">
                 <img
                   src={n.sender?.profilePic || "/avatar.png"}
                   alt={n.sender?.username}
                   className="w-11 h-11 rounded-full object-cover"
                 />
-                <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5">
+
+                <div className="absolute -bottom-0.5 -right-0.5 bg-black rounded-full p-0.5">
                   {typeIcon(n.type)}
                 </div>
               </div>
+
+              {/* TEXT */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800">
-                  <span className="font-semibold">{n.sender?.username}</span>
-                  {" "}{typeText(n.type)}
+                <p className="text-sm text-[#ddd]">
+                  <span className="font-semibold text-white">
+                    {n.sender?.username}
+                  </span>{" "}
+                  {typeText(n.type)}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.createdAt)}</p>
+
+                <p className="text-xs text-[#666] mt-0.5">
+                  {timeAgo(n.createdAt)}
+                </p>
               </div>
-              {!n.isRead && <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+
+              {/* UNREAD DOT */}
+              {!n.isRead && (
+                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+              )}
+
+              {/* DELETE BUTTON */}
               <button
                 onClick={(e) => handleDelete(e, n._id)}
-                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition flex-shrink-0"
+                className="opacity-0 group-hover:opacity-100 text-[#444] hover:text-red-500 transition flex-shrink-0"
               >
                 <FaTrash size={12} />
               </button>
@@ -173,7 +202,8 @@ function Notifications() {
         </div>
       )}
     </div>
-  );
+  </div>
+);
 }
 
 export default Notifications;

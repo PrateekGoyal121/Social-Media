@@ -184,235 +184,168 @@ function PostModal({ post, onClose }) {
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
+  <div
+    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md"
+    onClick={onClose}
+  >
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm"
-      onClick={onClose}
+      className="relative bg-zinc-900 text-white w-full sm:w-auto sm:max-w-5xl sm:rounded-2xl rounded-t-3xl overflow-hidden flex flex-col sm:flex-row border border-zinc-800"
+      style={{ height: "92vh", maxHeight: "92vh" }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div
-        className="relative bg-white w-full sm:w-auto sm:max-w-5xl sm:rounded-2xl rounded-t-3xl overflow-hidden flex flex-col sm:flex-row"
-        style={{ height: "92vh", maxHeight: "92vh" }}
-        onClick={(e) => e.stopPropagation()}
+      {/* CLOSE */}
+      <button
+        onClick={onClose}
+        className="absolute right-3 top-3 z-30 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
       >
+        <FaTimes size={13} />
+      </button>
 
-        {/* CLOSE */}
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 z-30 w-8 h-8 flex items-center justify-center rounded-full bg-black/30 text-white hover:bg-black/50 transition-colors"
-        >
-          <FaTimes size={13} />
-        </button>
+      {/* IMAGE */}
+      <div
+        className="relative bg-black flex items-center justify-center overflow-hidden cursor-pointer sm:w-[56%]"
+        onDoubleClick={handleImageDoubleClick}
+      >
+        <img
+          src={post.image}
+          alt=""
+          className="w-full h-full object-contain"
+        />
 
-        {/* ══ IMAGE ══ */}
-        <div
-          className="relative bg-black flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer h-[42vw] min-h-[190px] max-h-[320px] sm:h-full sm:max-h-full sm:min-h-0 sm:w-[56%]"
-          onDoubleClick={handleImageDoubleClick}
-        >
-          <img
-            src={post.image}
-            alt=""
-            className="w-full h-full object-cover sm:object-contain"
-            loading="lazy"
-          />
-          {likeAnimating && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <FaHeart
-                size={80}
-                className="text-white drop-shadow-2xl"
-                style={{ animation: "heartPop 0.7s ease-out forwards" }}
-              />
-              <style>{`
-                @keyframes heartPop {
-                  0%   { transform: scale(0.2); opacity: 0.9; }
-                  45%  { transform: scale(1.3); opacity: 1; }
-                  100% { transform: scale(1.1); opacity: 0; }
-                }
-              `}</style>
-            </div>
-          )}
+        {likeAnimating && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <FaHeart
+              size={90}
+              className="text-white drop-shadow-2xl"
+              style={{ animation: "heartPop 0.7s ease-out forwards" }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className="flex-1 flex flex-col bg-zinc-900">
+
+        {/* AUTHOR */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            <img
+              src={post.author?.profilePic}
+              alt=""
+              className="w-9 h-9 rounded-full object-cover"
+            />
+            <p className="font-semibold">{post.author?.username}</p>
+          </div>
+
+          <FaEllipsisH className="text-gray-400" />
         </div>
 
-        {/* ══ RIGHT PANEL ══ */}
-        <div className="flex-1 flex flex-col min-h-0 sm:w-[44%] overflow-hidden">
-
-          {/* AUTHOR */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full overflow-hidden ring-2 ring-gray-100 flex-shrink-0 bg-gray-100">
-                {post.author?.profilePic ? (
-                  <img src={post.author.profilePic} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center text-white text-sm font-bold">
-                    {post.author?.username?.[0]?.toUpperCase() || "?"}
-                  </div>
-                )}
-              </div>
-              <p className="text-sm font-bold text-gray-900">{post.author?.username}</p>
-            </div>
-            <button className="text-gray-400 hover:text-gray-700 p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-              <FaEllipsisH size={14} />
-            </button>
-          </div>
-
-          {/* ══ SCROLLABLE AREA ══ */}
-          <div className="flex-1 overflow-y-auto min-h-0">
-
-            {/* ── CAPTION — distinct full-width block, not a bubble ── */}
-            {post.content && (
-              <div className="px-4 py-4 border-b border-gray-100 bg-white">
-                <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-100">
-                    {post.author?.profilePic ? (
-                      <img src={post.author.profilePic} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center text-white text-xs font-bold">
-                        {post.author?.username?.[0]?.toUpperCase() || "?"}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 leading-relaxed break-words">
-                      <span className="font-bold mr-1.5">{post.author?.username}</span>
-                      <span className="text-gray-800 font-normal">{post.content}</span>
-                    </p>
-                    {post.createdAt && (
-                      <p className="text-[11px] text-gray-400 mt-1">{formatTime(post.createdAt)}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── COMMENTS — separate section with light bg ── */}
-            <div className="px-4 py-3 space-y-3">
-
-              {/* Comments header label */}
-              <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-                Comments
-              </p>
-
-              {/* Empty state */}
-              {comments.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-2">
-                    <FaRegComment size={18} className="text-gray-300" />
-                  </div>
-                  <p className="text-sm font-semibold text-gray-500">No comments yet</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Start the conversation</p>
-                </div>
-              )}
-
-              {/* Comment list — plain rows, no bubble */}
-              {comments.map((c) => {
-                const isDeleting   = deletingIds.has(c._id);
-                const isOwnComment = currentUser?._id === c.userId?._id && !c.isTemp;
-                return (
-                  <div
-                    key={c._id}
-                    className="flex gap-3 items-start"
-                    style={{ opacity: c.isTemp || isDeleting ? 0.45 : 1, transition: "opacity 0.2s" }}
-                  >
-                    {/* Avatar */}
-                    <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-100 mt-0.5">
-                      {c.userId?.profilePic ? (
-                        <img src={c.userId.profilePic} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center text-white text-xs font-bold">
-                          {c.userId?.username?.[0]?.toUpperCase() || "?"}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Text — plain, no bubble background */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900 leading-snug break-words">
-                        <span className="font-bold mr-1.5">{c.userId?.username}</span>
-                        <span className="text-gray-700 font-normal">{c.text}</span>
-                      </p>
-                      <div className="flex items-center gap-3 mt-1">
-                        {c.createdAt && (
-                          <span className="text-[11px] text-gray-400">{formatTime(c.createdAt)}</span>
-                        )}
-                        {isOwnComment && (
-                          <button
-                            onClick={() => handleDeleteComment(c._id)}
-                            disabled={isDeleting}
-                            className="flex items-center gap-1 text-[11px] text-red-400 hover:text-red-600 active:scale-90 transition-all disabled:opacity-30 font-medium"
-                          >
-                            <FaTrash size={9} />
-                            <span>Delete</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div ref={commentsEndRef} />
-            </div>
-          </div>
-
-          {/* ACTIONS */}
-          <div className="flex-shrink-0 px-4 pt-3 pb-1.5 border-t border-gray-100">
-            <div className="flex items-center gap-4 mb-2">
-              <button onClick={handleLike} className="active:scale-75 transition-transform">
-                {liked ? (
-                  <FaHeart size={25} className="text-red-500" style={{ filter: "drop-shadow(0 0 5px rgba(239,68,68,0.45))" }} />
-                ) : (
-                  <FaRegHeart size={25} className="text-gray-800 hover:text-gray-500 transition-colors" />
-                )}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saveLoading}
-                className="ml-auto active:scale-90 transition-transform disabled:opacity-50"
-              >
-                {saved ? (
-                  <FaBookmark size={22} className="text-gray-900" />
-                ) : (
-                  <FaRegBookmark size={22} className="text-gray-800 hover:text-gray-500 transition-colors" />
-                )}
-              </button>
-            </div>
-            <p className="text-sm font-bold text-gray-900">
-              {likesCount.toLocaleString()} {likesCount === 1 ? "like" : "likes"}
+        {/* CAPTION */}
+        {post.content && (
+          <div className="px-4 py-4 border-b border-zinc-800">
+            <p className="text-sm text-gray-300">
+              <span className="font-semibold text-white mr-2">
+                {post.author?.username}
+              </span>
+              {post.content}
             </p>
           </div>
+        )}
 
-          {/* ADD COMMENT */}
-          <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-3 border-t border-gray-100 bg-white">
-            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-100">
-              {currentUser?.profilePic ? (
-                <img src={currentUser.profilePic} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center text-white text-xs font-bold">
-                  {currentUser?.username?.[0]?.toUpperCase() || "?"}
-                </div>
-              )}
-            </div>
-            <div className="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2">
-              <input
-                ref={inputRef}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Add a comment…"
-                className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400 text-gray-900 min-w-0"
+        {/* COMMENTS */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {comments.length === 0 && (
+            <p className="text-center text-gray-500 text-sm">
+              No comments yet
+            </p>
+          )}
+
+          {comments.map((c) => (
+            <div key={c._id} className="flex gap-3">
+              <img
+                src={c.userId?.profilePic}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover"
               />
+
+              <div className="flex-1">
+                <p className="text-sm">
+                  <span className="font-semibold text-white mr-2">
+                    {c.userId?.username}
+                  </span>
+                  <span className="text-gray-300">{c.text}</span>
+                </p>
+
+                {currentUser?._id === c.userId?._id && (
+                  <button
+                    onClick={() => handleDeleteComment(c._id)}
+                    className="text-xs text-red-400 mt-1"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
+          ))}
+        </div>
+
+        {/* ACTIONS */}
+        <div className="px-4 py-3 border-t border-zinc-800">
+          <div className="flex items-center gap-4 mb-2">
+            <button onClick={handleLike}>
+              {liked ? (
+                <FaHeart size={26} className="text-red-500" />
+              ) : (
+                <FaRegHeart size={26} className="text-gray-300" />
+              )}
+            </button>
+
             <button
-              onClick={handleAddComment}
-              disabled={!text.trim()}
-              className="text-sm font-bold text-[#0095F6] disabled:text-gray-300 hover:text-[#1877F2] transition-colors active:scale-95 flex-shrink-0 disabled:cursor-default"
+              onClick={handleSave}
+              disabled={saveLoading}
+              className="ml-auto"
             >
-              Post
+              {saved ? (
+                <FaBookmark size={22} />
+              ) : (
+                <FaRegBookmark size={22} className="text-gray-300" />
+              )}
             </button>
           </div>
 
+          <p className="font-semibold">
+            {likesCount} {likesCount === 1 ? "like" : "likes"}
+          </p>
+        </div>
+
+        {/* ADD COMMENT */}
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-zinc-800">
+          <img
+            src={currentUser?.profilePic}
+            alt=""
+            className="w-8 h-8 rounded-full object-cover"
+          />
+
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Add a comment..."
+            className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-sm outline-none placeholder-gray-500"
+          />
+
+          <button
+            onClick={handleAddComment}
+            disabled={!text.trim()}
+            className="text-sm font-semibold text-blue-400 disabled:text-gray-600"
+          >
+            Post
+          </button>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
 
 export default PostModal;
