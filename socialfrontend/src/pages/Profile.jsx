@@ -168,7 +168,6 @@ function Profile() {
   const uniqueFollowing = dedupeUsers(profileUser.following);
   const modalUsers      = modalType ? dedupeUsers(profileUser[modalType]) : [];
 
-  // tabs — Tagged removed, Saved only on own profile
   const tabs = [
     { key: "posts", icon: <FaThLarge size={11} />, label: "POSTS" },
     ...(isOwnProfile ? [{ key: "saved", icon: <FaBookmark size={11} />, label: "SAVED" }] : []),
@@ -228,7 +227,22 @@ function Profile() {
                 </button>
 
                 {isFollowing && (
-                  <button onClick={() => navigate("/chat")} className="px-3 sm:px-4 py-[6px] rounded-lg bg-[#1a1a1d] hover:bg-[#222226] text-xs sm:text-sm font-semibold transition">
+                  <button
+                    onClick={() =>
+                      // ✅ Pass the full profileUser object as location state
+                      // so the Chat page can auto-select this user in the sidebar
+                      navigate("/chat", {
+                        state: {
+                          selectedUser: {
+                            _id:        profileUser._id,
+                            username:   profileUser.username,
+                            profilePic: profileUser.profilePic,
+                          },
+                        },
+                      })
+                    }
+                    className="px-3 sm:px-4 py-[6px] rounded-lg bg-[#1a1a1d] hover:bg-[#222226] text-xs sm:text-sm font-semibold transition"
+                  >
                     Message
                   </button>
                 )}

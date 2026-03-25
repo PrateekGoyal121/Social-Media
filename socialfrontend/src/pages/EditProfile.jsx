@@ -60,7 +60,7 @@ function EditProfile() {
   };
 
   return (
-  <div className="min-h-screen bg-[#0b0b0c] flex items-center justify-center p-6 text-gray-100">
+  <div className="min-h-screen bg-black flex items-center justify-center p-6 text-gray-100">
     <Toaster position="top-right" />
 
     <div className="w-full max-w-lg bg-[#121214] border border-gray-800 shadow-2xl rounded-2xl p-8">

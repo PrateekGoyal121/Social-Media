@@ -25,12 +25,7 @@ function App() {
   };
 
     if (!socket.connected) socket.connect();
-
-    // const joinRoom = () => socket.emit("join", user._id.toString());
-
-    // if (socket.connected) joinRoom();
-    // else socket.once("connect", joinRoom);
-
+    
     socket.on("connect",joinRoom);
     if (socket.connected) joinRoom();
 

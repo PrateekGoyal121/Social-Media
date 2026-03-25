@@ -1,11 +1,10 @@
 const Message    = require("../models/Message");
+const User       = require("../models/User");
 const mongoose   = require("mongoose");
 const cloudinary = require("cloudinary").v2;
 
 const getId = (req) => (req.user._id || req.user.id).toString();
 
-// Convert Mongoose doc to plain object so socket.io serializes
-// identically to res.json() — _id, sender, receiver all strings
 const plain = (doc) => {
   const o    = doc.toObject();
   o._id      = o._id.toString();
@@ -26,13 +25,10 @@ exports.sendMessage = async (req, res) => {
     const message  = plain(doc);
 
     const io = req.app.get("io");
-    if (io){
-      console.log("emitting to sender:", senderId.toString());
-      console.log("emitting to receiver:", receiverId.toString());
-      console.log("io rooms:", [...io.sockets.adapter.rooms.keys()]);
+    if (io) {
       io.to(receiverId.toString()).emit("receiveMessage", message);
       io.to(senderId.toString()).emit("receiveMessage", message);
-    } 
+    }
     return res.status(200).json({ success: true, message });
   } catch (err) {
     console.error("sendMessage:", err);
@@ -41,8 +37,6 @@ exports.sendMessage = async (req, res) => {
 };
 
 // ── SEND IMAGE (+ optional caption) ──────────────────────────────────────────
-// Message text is stored as JSON: { imageUrl, caption }
-// so ChatBubble can render the image and caption together in one bubble.
 exports.sendImageMessage = async (req, res) => {
   try {
     const { receiverId, caption = "" } = req.body;
@@ -58,21 +52,19 @@ exports.sendImageMessage = async (req, res) => {
     if (!["jpg","jpeg","png","gif","webp"].includes(ext))
       return res.status(400).json({ success: false, message: "Unsupported file type" });
 
-    const upload  = await cloudinary.uploader.upload(file.tempFilePath, {
+    const upload = await cloudinary.uploader.upload(file.tempFilePath, {
       folder: "chat_images", resource_type: "image",
     });
 
-    // Store as JSON so caption and imageUrl travel together in one message
-    const text = JSON.stringify({ imageUrl: upload.secure_url, caption: caption.trim() });
-
+    const text    = JSON.stringify({ imageUrl: upload.secure_url, caption: caption.trim() });
     const doc     = await Message.create({ sender: senderId, receiver: receiverId, text });
     const message = plain(doc);
 
     const io = req.app.get("io");
-    if (io){
+    if (io) {
       io.to(receiverId.toString()).emit("receiveMessage", message);
       io.to(senderId.toString()).emit("receiveMessage", message);
-    } 
+    }
     return res.status(200).json({ success: true, message });
   } catch (err) {
     console.error("sendImageMessage:", err);
@@ -112,11 +104,20 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// ── GET CHAT LIST ─────────────────────────────────────────────────────────────
+// ── GET CHAT LIST (includes following users even with no messages) ─────────────
 exports.getChatList = async (req, res) => {
   try {
     const userId = new mongoose.Types.ObjectId(getId(req));
-    const chats  = await Message.aggregate([
+
+    // 1. Get all users that the current user follows
+    const currentUser = await User.findById(userId)
+      .select("following")
+      .populate("following", "_id username profilePic");
+
+    const followingUsers = currentUser?.following || [];
+
+    // 2. Get existing conversations (users you've messaged)
+    const chats = await Message.aggregate([
       { $match: { $or: [{ sender: userId }, { receiver: userId }] } },
       { $sort:  { createdAt: -1 } },
       {
@@ -144,7 +145,24 @@ exports.getChatList = async (req, res) => {
       },
       { $sort: { "lastMessage.createdAt": -1 } },
     ]);
-    return res.status(200).json({ success: true, chats });
+
+    // 3. Collect IDs of users already in chat list
+    const chattedIds = new Set(chats.map((c) => c._id.toString()));
+
+    // 4. Build entries for following users who have NO messages yet
+    const followingWithNoChat = followingUsers
+      .filter((u) => !chattedIds.has(u._id.toString()))
+      .map((u) => ({
+        _id:         u._id,
+        username:    u.username,
+        profilePic:  u.profilePic || "",
+        lastMessage: null,   // no messages yet
+      }));
+
+    // 5. Merge: existing chats first (sorted by time), then following with no chat
+    const merged = [...chats, ...followingWithNoChat];
+
+    return res.status(200).json({ success: true, chats: merged });
   } catch (err) {
     console.error("getChatList:", err);
     return res.status(500).json({ success: false, message: err.message });

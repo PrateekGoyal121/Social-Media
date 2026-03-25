@@ -16,7 +16,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // DB connect
-const connectDB = require("./config/db");
+const connectDB = require("./Config/db");
 connectDB();
 
 // middleware

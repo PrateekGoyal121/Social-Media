@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useContext, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // ✅ added useLocation
 import { AuthContext } from "../context/AuthContext";
 import socket from "../socket";
 import {
@@ -17,6 +17,7 @@ import ChatInput   from "../components/chat/chatInput";
 export default function Chat() {
   const { user } = useContext(AuthContext);
   const navigate  = useNavigate();
+  const location  = useLocation(); // ✅ read state passed from Profile
 
   const currentUserId = user?._id?.toString() ?? null;
 
@@ -30,12 +31,12 @@ export default function Chat() {
   const [onlineUsers,  setOnlineUsers]  = useState([]);
   const [isDesktop,    setIsDesktop]    = useState(window.innerWidth >= 768);
 
-  const myIdRef       = useRef(currentUserId);
-  const chatIdRef     = useRef(null);
-  const typingTimer   = useRef(null);
-  const myTypingTimer = useRef(null);
-  const messagesRef   = useRef([]);
-  const selectedUserRef =useRef(null);
+  const myIdRef         = useRef(currentUserId);
+  const chatIdRef       = useRef(null);
+  const typingTimer     = useRef(null);
+  const myTypingTimer   = useRef(null);
+  const messagesRef     = useRef([]);
+  const selectedUserRef = useRef(null);
 
   myIdRef.current = currentUserId;
 
@@ -44,8 +45,8 @@ export default function Chat() {
   }, [selectedUser]);
 
   useEffect(() => {
-  console.log("onlineUsers state:", onlineUsers);
-}, [onlineUsers]);
+    console.log("onlineUsers state:", onlineUsers);
+  }, [onlineUsers]);
 
   // ── Resize listener ────────────────────────────────────────────────
   useEffect(() => {
@@ -60,38 +61,68 @@ export default function Chat() {
 
   useEffect(() => { refreshList(); }, [refreshList]);
 
-  // ── Socket listeners only — NO connect/join here (App.js handles that) ──
+  // ── Auto-select user coming from Profile "Message" button ──────────
+  useEffect(() => {
+    const incoming = location.state?.selectedUser;
+    if (!incoming?._id) return;
+
+    // Wait until chatList is loaded so handleSelect can find the user
+    // If chatList is empty (still loading) we retry once it's populated
+    const selectIncoming = (list) => {
+      // Try to find the full entry from chatList (has lastMessage etc.)
+      const existing = list.find((c) => c._id?.toString() === incoming._id.toString());
+      handleSelect(existing ?? incoming);
+      // On mobile, switch to chat pane immediately
+      setMobilePane("chat");
+    };
+
+    if (chatList.length > 0) {
+      selectIncoming(chatList);
+    } else {
+      // chatList not loaded yet — wait for it via a one-time effect
+      const unsub = setTimeout(() => {
+        getChatList().then((r) => {
+          const list = r?.chats ?? [];
+          setChatList(list);
+          selectIncoming(list);
+        });
+      }, 300);
+      return () => clearTimeout(unsub);
+    }
+
+    // Clear location state so refreshing the page doesn't re-open the chat
+    window.history.replaceState({}, "");
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Socket listeners only ──────────────────────────────────────────
   useEffect(() => {
     const onReceiveMessage = (msg) => {
-      const myId = myIdRef.current;
-  const selected = selectedUserRef.current;
+      const myId    = myIdRef.current;
+      const selected = selectedUserRef.current;
 
-  if (!myId || !msg ) return;
+      if (!myId || !msg) return;
 
-  const sId = msg.sender?._id?.toString() ?? msg.sender?.toString() ?? "";
-  const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
+      const sId = msg.sender?._id?.toString() ?? msg.sender?.toString() ?? "";
+      const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
 
-  if(selected){
-    const isOpenChat =
-    (sId === selected._id?.toString() && rId === myId) ||
-    (sId === myId && rId === selected._id?.toString());
+      if (selected) {
+        const isOpenChat =
+          (sId === selected._id?.toString() && rId === myId) ||
+          (sId === myId && rId === selected._id?.toString());
 
-  if (isOpenChat) {
-    setMessages((prev) => {
-      const id = msg._id?.toString();
-      if (prev.some((m) => m._id?.toString() === id)) return prev;
-      return [...prev, msg];
-    });
-  }
-  }
+        if (isOpenChat) {
+          setMessages((prev) => {
+            const id = msg._id?.toString();
+            if (prev.some((m) => m._id?.toString() === id)) return prev;
+            return [...prev, msg];
+          });
+        }
+      }
 
       const otherUserId = sId === myId ? rId : sId;
       setChatList((prev) => {
         const idx = prev.findIndex((c) => c._id?.toString() === otherUserId);
-        if (idx === -1) {
-          refreshList();
-          return prev;
-        }
+        if (idx === -1) { refreshList(); return prev; }
         const next = [...prev];
         next[idx] = { ...next[idx], lastMessage: msg };
         return next;
@@ -107,9 +138,9 @@ export default function Chat() {
     };
 
     const onOnlineUsers = (ids) => {
-    console.log("onlineUsers received:", ids); // confirm it fires
-    setOnlineUsers(ids.map(String));
-  };
+      console.log("onlineUsers received:", ids);
+      setOnlineUsers(ids.map(String));
+    };
 
     socket.on("receiveMessage", onReceiveMessage);
     socket.on("typing",         onTyping);
