@@ -1,12 +1,14 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const {cloudinaryConnect } = require("./config/cloudinary");
+const {cloudinaryConnect } = require("./Config/cloudinary");
 const fileUpload = require("express-fileupload");
 const cookieParser = require("cookie-parser");
 const http = require("http");
 const { Server } = require("socket.io");
-const notificationSocket = require("./sockets/notificationSocket");
-const chatSocket = require("./sockets/chatSocket");
+// const {notificationSocket} = require("./sockets/notificationSocket");
+// const chatSocket = require("./sockets/chatSocket");
+const cors = require("cors");
+const {initSocket}=require("./sockets/socket");
 
 dotenv.config();
 
@@ -14,12 +16,16 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // DB connect
-const connectDB = require("./config/db");
+const connectDB = require("./Config/db");
 connectDB();
 
 // middleware
 app.use(express.json());
-app.use(cookieParser());  
+app.use(cookieParser()); 
+app.use(cors({
+  origin: "http://localhost:3001",
+  credentials: true
+})); 
 
 app.use(
   fileUpload({
@@ -35,13 +41,15 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "http://localhost:3001",
     methods: ["GET", "POST"],
+    credentials:true,
   },
 });
 
-notificationSocket(io);
-chatSocket(io);
+// notificationSocket(io);
+// chatSocket(io);
+initSocket(io);
 
 // make socket accessible in controllers
 app.set("io", io);

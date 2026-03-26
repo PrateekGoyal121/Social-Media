@@ -1,7 +1,7 @@
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Comment = require("../models/Comment");
-const {cloudinary} = require("../config/cloudinary");
+const {cloudinary} = require("../Config/cloudinary");
 
 const { createNotification } = require("./notificationController");
 
@@ -193,6 +193,8 @@ const addComment = async (req, res) => {
       text,
     });
 
+    await comment.populate("userId", "username profilePic");  //------>
+
     // 🔔 NOTIFICATION (comment)
     await createNotification({
       sender: req.user.id,
@@ -248,6 +250,149 @@ const deleteComment = async (req, res) => {
   }
 };
 
+const getAllPosts = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10;
+
+    const posts = await Post.find({})
+      .populate("author", "username profilePic")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    res.json({
+      success: true,
+      page,
+      posts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// GET ALL COMMENTS FOR A POST
+const getPostComments = async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    // Check if post exists
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
+      });
+    }
+
+    const comments = await Comment.find({ postId })
+      .populate("userId", "username profilePic")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: comments.length,
+      comments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Toggle save/unsave — PUT /v1/post/:id/save
+const toggleSavePost = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+ 
+    const userId = req.user.id;
+    const alreadySaved = post.savedBy?.includes(userId);
+ 
+    if (alreadySaved) {
+      post.savedBy.pull(userId);
+    } else {
+      post.savedBy.push(userId);
+    }
+ 
+    await post.save();
+ 
+    res.status(200).json({
+      success: true,
+      saved: !alreadySaved,
+      message: alreadySaved ? "Post unsaved" : "Post saved",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+ 
+// ─── GET SAVED POSTS ──────────────────────────────────────────────────────────
+// GET /v1/post/saved
+ 
+const getSavedPosts = async (req, res) => {
+  try {
+    const posts = await Post.find({ savedBy: req.user.id })
+      .populate("author", "username profilePic")
+      .sort({ createdAt: -1 });
+ 
+    res.status(200).json({ success: true, posts });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// SEARCH USERS BY USERNAME
+// GET /v1/post/search?username=john
+const searchUsers = async (req, res) => {
+  try {
+    const { username } = req.query;
+
+    if (!username || !username.trim()) {
+      return res.status(400).json({ success: false, message: "Username is required" });
+    }
+
+    const users = await User.find({
+      username: { $regex: username.trim(), $options: "i" },
+    })
+      .select("_id username profilePic followers")
+      .limit(10);
+
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+ 
+ 
+// ─────────────────────────────────────────────────────────────
+// ADD THIS to your existing userController.js (or a new file)
+// ─────────────────────────────────────────────────────────────
+ 
+// GET SUGGESTED USERS
+// GET /v1/user/suggestions
+const getSuggestedUsers = async (req, res) => {
+  try {
+    const me = await User.findById(req.user.id);
+ 
+    // Exclude self + people already followed
+    const excluded = [...(me.following || []), me._id];
+ 
+    const users = await User.find({ _id: { $nin: excluded } })
+      .select("username profilePic followers following")
+      .limit(10);
+ 
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 module.exports = {
   createPost,
@@ -257,5 +402,11 @@ module.exports = {
   getSinglePost,
   getUserPosts,
   addComment,
-  deleteComment
+  deleteComment,
+  getAllPosts,
+  getPostComments,
+  toggleSavePost,
+  getSavedPosts,
+  searchUsers,
+  getSuggestedUsers,
 };

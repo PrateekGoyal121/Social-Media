@@ -1,0 +1,424 @@
+import { useEffect, useState, useRef, useContext, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
+import socket from "../socket";
+import {
+  getChatList,
+  getChat,
+  sendMessage,
+  sendImageMessage,
+  markAsRead,
+} from "../services/chatService";
+import ChatSidebar from "../components/chat/chatSidebar";
+import ChatHeader  from "../components/chat/chatHeader";
+import ChatWindow  from "../components/chat/chatWindow";
+import ChatInput   from "../components/chat/chatInput";
+
+export default function Chat() {
+  const { user } = useContext(AuthContext);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  const currentUserId = user?._id?.toString() ?? null;
+
+  const [chatList,     setChatList]     = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [messages,     setMessages]     = useState([]);
+  const [text,         setText]         = useState("");
+  const [otherTyping,  setOtherTyping]  = useState(false);
+  const [reactions,    setReactions]    = useState({});
+  const [mobilePane,   setMobilePane]   = useState("list");
+  const [onlineUsers,  setOnlineUsers]  = useState([]);
+  const [isDesktop,    setIsDesktop]    = useState(window.innerWidth >= 768);
+
+  const myIdRef         = useRef(currentUserId);
+  const chatIdRef       = useRef(null);
+  const typingTimer     = useRef(null);
+  const myTypingTimer   = useRef(null);
+  const messagesRef     = useRef([]);
+  const selectedUserRef = useRef(null);
+
+  myIdRef.current = currentUserId;
+
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+
+  // ── Resize listener ────────────────────────────────────────────────
+  useEffect(() => {
+    const fn = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+
+  // ── Chat list refresh ──────────────────────────────────────────────
+  const refreshList = useCallback(() =>
+    getChatList().then((r) => { if (r?.success) setChatList(r.chats ?? []); }), []);
+
+  useEffect(() => { refreshList(); }, [refreshList]);
+
+  // ── Auto-select user coming from Profile "Message" button ──────────
+  useEffect(() => {
+    const incoming = location.state?.selectedUser;
+    if (!incoming?._id) return;
+
+    const selectIncoming = (list) => {
+      const existing = list.find((c) => c._id?.toString() === incoming._id.toString());
+      handleSelect(existing ?? incoming);
+      setMobilePane("chat");
+    };
+
+    if (chatList.length > 0) {
+      selectIncoming(chatList);
+    } else {
+      const unsub = setTimeout(() => {
+        getChatList().then((r) => {
+          const list = r?.chats ?? [];
+          setChatList(list);
+          selectIncoming(list);
+        });
+      }, 300);
+      return () => clearTimeout(unsub);
+    }
+
+    window.history.replaceState({}, "");
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Socket listeners ───────────────────────────────────────────────
+  useEffect(() => {
+    const onReceiveMessage = async (msg) => {
+      const myId     = myIdRef.current;
+      const selected = selectedUserRef.current;
+
+      if (!myId || !msg) return;
+
+      const sId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+      const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString();
+
+      const otherUserId = sId === myId ? rId : sId;
+
+      const isOpenChat =
+        selected &&
+        sId === selected._id?.toString() &&
+        rId === myId;
+
+      // Add to UI only if this conversation is open
+      if (
+        selected && (
+          isOpenChat ||
+          (sId === myId && rId === selected._id?.toString())
+        )
+      ) {
+        setMessages((prev) => {
+          const id = msg._id?.toString();
+          if (prev.some((m) => m._id?.toString() === id)) return prev;
+          return [...prev, msg];
+        });
+      }
+
+      // Mark as read if the other user's chat is currently open
+      if (isOpenChat) {
+        try {
+          await markAsRead({ senderId: selected._id });
+        } catch (e) {
+          console.error("markAsRead failed:", e);
+        }
+      }
+
+      // Always update sidebar preview even if no chat is open
+      setChatList((prev) => {
+        const idx = prev.findIndex((c) => c._id?.toString() === otherUserId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], lastMessage: msg };
+        return next;
+      });
+    };
+
+    const onTyping = ({ senderId }) => {
+      if (senderId?.toString() === chatIdRef.current) {
+        setOtherTyping(true);
+        clearTimeout(typingTimer.current);
+        typingTimer.current = setTimeout(() => setOtherTyping(false), 2500);
+      }
+    };
+
+    const onOnlineUsers = (ids) => {
+      setOnlineUsers(ids.map(String));
+    };
+
+    const onMessageDeleted = ({ messageId }) => {
+      setMessages((prev) => prev.filter((m) => m._id?.toString() !== messageId));
+    };
+
+    const onMessagesRead = ({ by, messageIds }) => {
+      const myId = myIdRef.current;
+      if (!myId) return;
+
+      const readSet = new Set(messageIds ?? []);
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+          if (senderId !== myId) return msg;
+          if (readSet.size > 0) {
+            return readSet.has(msg._id?.toString()) ? { ...msg, read: true } : msg;
+          }
+          return { ...msg, read: true };
+        })
+      );
+
+      // Also update read status on the sidebar lastMessage preview (blue tick)
+      setChatList((prev) =>
+        prev.map((c) => {
+          if (!c.lastMessage) return c;
+          const lastMsgSender =
+            c.lastMessage.sender?._id?.toString() ?? c.lastMessage.sender?.toString();
+          if (lastMsgSender !== myId) return c;
+          if (readSet.has(c.lastMessage._id?.toString())) {
+            return { ...c, lastMessage: { ...c.lastMessage, read: true } };
+          }
+          return c;
+        })
+      );
+    };
+
+    socket.on("receiveMessage", onReceiveMessage);
+    socket.on("typing",         onTyping);
+    socket.on("onlineUsers",    onOnlineUsers);
+    socket.on("messageDeleted", onMessageDeleted);
+    socket.on("messagesRead",   onMessagesRead);
+    socket.emit("getOnlineUsers");
+
+    return () => {
+      socket.off("receiveMessage", onReceiveMessage);
+      socket.off("typing",         onTyping);
+      socket.off("onlineUsers",    onOnlineUsers);
+      socket.off("messageDeleted", onMessageDeleted);
+      socket.off("messagesRead",   onMessagesRead);
+      clearTimeout(typingTimer.current);
+      clearTimeout(myTypingTimer.current);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Select a conversation ──────────────────────────────────────────
+  const handleSelect = useCallback((chat) => {
+    if (!chat?._id) return;
+    const newChatId = chat._id.toString();
+    if (newChatId === chatIdRef.current) return;
+
+    chatIdRef.current = newChatId;
+
+    setSelectedUser(chat);
+    setMessages([]);
+    setOtherTyping(false);
+    setText("");
+    setReactions({});
+    if (!isDesktop) setMobilePane("chat");
+
+    markAsRead({ senderId: chat._id }).catch((e) =>
+    console.error("markAsRead on select failed:", e)
+  );
+
+  // Add this inside handleSelect right after the markAsRead call
+const myId = myIdRef.current;
+
+// ✅ FIX 2: Optimistically mark all current messages from this sender as read in UI
+setMessages((prev) =>
+  prev.map((msg) => {
+    const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+    return senderId !== myId ? { ...msg, read: true } : msg;
+  })
+);
+
+    getChat(chat._id).then((r) => {
+  if (!r?.success) return;
+  const fetched = r.messages ?? [];
+
+  // ✅ FIX 2b: Mark fetched messages from the other user as read in UI immediately
+  const markedRead = fetched.map((msg) => {
+    const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+    return senderId !== myIdRef.current ? { ...msg, read: true } : msg;
+  });
+
+  setMessages((prev) => {
+    const fetchedIds = new Set(markedRead.map((m) => m._id?.toString()));
+    const live = prev.filter((m) => !fetchedIds.has(m._id?.toString()));
+    return [...markedRead, ...live];
+  });
+});
+  }, [isDesktop]);
+
+  const handleDeleteMessage = useCallback((messageId) => {
+    setMessages((prev) => prev.filter((m) => m._id?.toString() !== messageId));
+  }, []);
+
+  const handleDeleteChat = useCallback((ids) => {
+    const idStrings = ids.map((id) => id?.toString());
+
+    // Optimistically remove from UI immediately
+    setChatList((prev) =>
+      prev.filter((c) => !idStrings.includes(c._id?.toString()))
+    );
+
+    // Reset chat window if the open chat was deleted
+    if (selectedUser && idStrings.includes(selectedUser._id?.toString())) {
+      setSelectedUser(null);
+      setMessages([]);
+      chatIdRef.current = null;
+    }
+
+    // ✅ Re-fetch so deleted users reappear in Suggested instantly.
+    // Backend returns following-users with lastMessage:null after soft-delete,
+    // so they show up in the Suggested section automatically.
+    refreshList();
+  }, [selectedUser, refreshList]);
+
+  // ── Send text ──────────────────────────────────────────────────────
+  const handleSend = useCallback(async (overrideText) => {
+    if (overrideText && typeof overrideText === "object" && overrideText.preventDefault) {
+      overrideText = undefined;
+    }
+
+    const raw     = overrideText !== undefined ? overrideText : text;
+    const payload = `${raw ?? ""}`.trim();
+
+    if (!payload || !selectedUser) return;
+
+    if (overrideText === undefined) setText("");
+
+    const res = await sendMessage({ receiverId: selectedUser._id, text: payload });
+
+    if (res?.success) {
+      setMessages((prev) => {
+        const id = res.message._id?.toString();
+        if (prev.some((m) => m._id?.toString() === id)) return prev;
+        return [...prev, res.message];
+      });
+      setChatList((prev) =>
+        prev.map((c) =>
+          c._id?.toString() === selectedUser._id?.toString()
+            ? { ...c, lastMessage: res.message }
+            : c
+        )
+      );
+    } else {
+      if (overrideText === undefined) setText(payload);
+    }
+  }, [text, selectedUser]);
+
+  // ── Send image ─────────────────────────────────────────────────────
+  const handleImageSend = useCallback(async (file, caption = "") => {
+    if (!file || !selectedUser) return;
+    const res = await sendImageMessage({ receiverId: selectedUser._id, file, caption });
+    if (res?.success) {
+      setMessages((prev) => {
+        const id = res.message._id?.toString();
+        if (prev.some((m) => m._id?.toString() === id)) return prev;
+        return [...prev, res.message];
+      });
+      setChatList((prev) =>
+        prev.map((c) =>
+          c._id?.toString() === selectedUser._id?.toString()
+            ? { ...c, lastMessage: res.message }
+            : c
+        )
+      );
+    }
+  }, [selectedUser]);
+
+  // ── Typing indicator ───────────────────────────────────────────────
+  const handleTextChange = useCallback((newVal) => {
+    setText(newVal);
+    if (!selectedUser || !socket.connected) return;
+    if (myTypingTimer.current) return;
+    socket.emit("typing", {
+      receiverId: selectedUser._id?.toString(),
+      senderId:   myIdRef.current,
+    });
+    myTypingTimer.current = setTimeout(() => {
+      myTypingTimer.current = null;
+    }, 1500);
+  }, [selectedUser]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }, [handleSend]);
+
+  const handleReact = useCallback((msgId, emoji) =>
+    setReactions((prev) => ({
+      ...prev,
+      [msgId]: prev[msgId] === emoji ? undefined : emoji,
+    })), []);
+
+  const handleProfileClick = useCallback((id) => {
+    if (id) navigate(`/profile/${id}`);
+  }, [navigate]);
+
+  const isOnline = useCallback(
+    (userId) => onlineUsers.includes(userId?.toString()),
+    [onlineUsers]
+  );
+
+  const showSidebar = isDesktop || mobilePane === "list";
+  const showChat    = isDesktop || mobilePane === "chat";
+
+  return (
+    <div className="fixed top-0 left-0 right-0 bottom-14 md:left-20 md:bottom-0 flex bg-black overflow-hidden">
+      <div className={`${showSidebar ? "flex" : "hidden"} flex-col h-full overflow-hidden shrink-0 w-full md:w-[360px] md:border-r md:border-[#1a1a1a]`}>
+        <ChatSidebar
+          chatList={chatList}
+          selectedUser={selectedUser}
+          currentUserId={currentUserId}
+          currentUser={user}
+          onSelect={handleSelect}
+          onProfileClick={handleProfileClick}
+          isOnline={isOnline}
+          onDeleteChat={handleDeleteChat}
+        />
+      </div>
+
+      <div className={`${showChat ? "flex" : "hidden"} flex-col h-full overflow-hidden flex-1 min-w-0`}>
+        {selectedUser ? (
+          <>
+            <ChatHeader
+              selectedUser={selectedUser}
+              isMobile={!isDesktop}
+              onBack={() => setMobilePane("list")}
+              onProfileClick={handleProfileClick}
+              isOnline={isOnline(selectedUser._id)}
+            />
+            <ChatWindow
+              messages={messages}
+              currentUserId={currentUserId}
+              selectedUser={selectedUser}
+              otherTyping={otherTyping}
+              reactions={reactions}
+              onReact={handleReact}
+              onProfileClick={handleProfileClick}
+              onDeleteMessage={handleDeleteMessage}
+            />
+            <ChatInput
+              text={text}
+              onChange={handleTextChange}
+              onSend={handleSend}
+              onLike={() => handleSend("❤️")}
+              onKeyDown={handleKeyDown}
+              onImageSend={handleImageSend}
+            />
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center bg-black">
+            <div className="w-22 h-22 rounded-full border-2 border-[#262626] flex items-center justify-center mb-4">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5" width="38" height="38">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+            </div>
+            <p className="text-lg font-bold text-white mb-1">Your Messages</p>
+            <p className="text-sm text-[#555]">Select a conversation to start.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
