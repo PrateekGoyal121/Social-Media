@@ -7,6 +7,7 @@ const {
   getChatList,
   deleteChat,
   markAllAsRead,
+  deleteMessage,
 } = require("../controllers/chatController");
 const { auth } = require("../middleware/authMiddleware");
 
@@ -19,6 +20,7 @@ router.post("/send-image",       auth, sendImageMessage);
 router.put("/read",              auth, markAsRead);
 router.put("/mark-all-read",     auth, markAllAsRead);
 router.delete("/delete/:userId", auth, deleteChat);
+router.delete("/message/:messageId",auth,deleteMessage);
 router.get("/:userId",           auth, getChat);      // dynamic — always last
 
 module.exports = router;

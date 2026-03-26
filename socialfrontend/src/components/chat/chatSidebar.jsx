@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ChatAvatar from "./chatAvatar";
-import { SearchIcon } from "./chatIcon";
+import { SearchIcon} from "./chatIcon";
+import { deleteChat } from "../../services/chatService";
 
 const isImgUrl = (t = "") =>
   t.startsWith("https://res.cloudinary.com") ||
@@ -38,33 +39,34 @@ const preview = (lastMsg, isMe) => {
 
 export default function ChatSidebar({
   chatList = [],
-  allUsers = [],          // ← NEW: pass all users from your backend
+  allUsers = [],
   selectedUser,
   currentUserId,
   currentUser,
   onSelect,
   onProfileClick,
   isOnline,
+  onDeleteChat,
 }) {
-  const [search, setSearch] = useState("");
+  const [search,     setSearch]     = useState("");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected,   setSelected]   = useState(new Set());
+  const [deleting,   setDeleting]   = useState(false);
 
-  // Merge chatList + allUsers
-  // chatList users take priority (they have lastMessage data)
-  // allUsers who are NOT already in chatList get added at the bottom
+  // Merge chatList + allUsers (Code 1 feature)
   const chatListIds = new Set(chatList.map((c) => c?._id?.toString()));
 
   const usersWithoutChat = allUsers.filter(
     (u) =>
-      u?._id?.toString() !== currentUserId?.toString() && // exclude self
-      !chatListIds.has(u?._id?.toString())                // exclude already in chatList
+      u?._id?.toString() !== currentUserId?.toString() &&
+      !chatListIds.has(u?._id?.toString())
   );
 
-  // Convert plain users to same shape as chatList items
   const usersAsChat = usersWithoutChat.map((u) => ({
     _id: u._id,
     username: u.username,
     profilePic: u.profilePic,
-    lastMessage: null, // no messages yet
+    lastMessage: null,
   }));
 
   const mergedList = [...chatList, ...usersAsChat];
@@ -73,9 +75,31 @@ export default function ChatSidebar({
     (c?.username || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  // Split into two groups for display
+  // Split into two groups for display (Code 1 feature)
   const withMessages    = filtered.filter((c) => c.lastMessage);
   const withoutMessages = filtered.filter((c) => !c.lastMessage);
+
+  const toggleSelect = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setDeleting(true);
+    await Promise.all([...selected].map((id) => deleteChat(id)));
+    onDeleteChat?.([...selected]);
+    setDeleting(false);
+    exitSelectMode();
+  };
 
   return (
     <div className="w-full h-full flex flex-col bg-black">
@@ -83,20 +107,44 @@ export default function ChatSidebar({
       {/* Header */}
       <div className="px-5 pt-5 pb-3 border-b border-neutral-800 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
-          <button
-            type="button"
-            onClick={() => currentUser?._id && onProfileClick?.(currentUser._id)}
-            className="flex items-center gap-2.5 hover:opacity-75 transition-opacity"
-          >
-            <ChatAvatar
-              src={currentUser?.profilePic}
-              name={currentUser?.username || ""}
-              size="sm"
-            />
-            <span className="font-bold text-[15px] text-white">
-              {currentUser?.username || ""}
-            </span>
-          </button>
+          {selectMode ? (
+            <>
+              <button
+                type="button"
+                onClick={exitSelectMode}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <span className="text-sm font-semibold text-white">
+                {selected.size} selected
+              </span>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => currentUser?._id && onProfileClick?.(currentUser._id)}
+                className="flex items-center gap-2.5 hover:opacity-75 transition-opacity"
+              >
+                <ChatAvatar
+                  src={currentUser?.profilePic}
+                  name={currentUser?.username || ""}
+                  size="sm"
+                />
+                <span className="font-bold text-[15px] text-white">{currentUser?.username || ""}</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectMode(true)}
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                >
+                  Edit
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 bg-neutral-900 rounded-xl px-3.5 py-2.5">
@@ -113,23 +161,27 @@ export default function ChatSidebar({
       {/* List */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
 
-        {/* ── Conversations (users you've messaged) ── */}
+        {/* Messages section */}
         {withMessages.length > 0 && (
           <>
             <p className="px-5 pt-4 pb-1 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
               Messages
             </p>
-            {withMessages.map((chat) => renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect }))}
+            {withMessages.map((chat) =>
+              renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect, selectMode, selected, toggleSelect })
+            )}
           </>
         )}
 
-        {/* ── All other users (no messages yet) ── */}
+        {/* Suggested section */}
         {withoutMessages.length > 0 && (
           <>
             <p className="px-5 pt-4 pb-1 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
               Suggested
             </p>
-            {withoutMessages.map((chat) => renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect }))}
+            {withoutMessages.map((chat) =>
+              renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect, selectMode, selected, toggleSelect })
+            )}
           </>
         )}
 
@@ -137,32 +189,81 @@ export default function ChatSidebar({
           <p className="text-center text-neutral-600 text-sm py-10">No users found</p>
         )}
       </div>
+
+      {/* Bottom delete bar — only in select mode (Code 2 feature) */}
+      {selectMode && (
+        <div className="flex-shrink-0 border-t border-neutral-800 px-5 py-4 flex items-center justify-between bg-black">
+          <button
+            type="button"
+            onClick={() => setSelected(new Set(filtered.map((c) => c._id)))}
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={selected.size === 0 || deleting}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors
+              ${selected.size > 0
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-neutral-800 text-neutral-600 cursor-not-allowed"}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4h6v2"/>
+            </svg>
+            {deleting ? "Deleting..." : `Delete${selected.size > 0 ? ` (${selected.size})` : ""}`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Shared row renderer ──────────────────────────────────────────────────────
-function renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect }) {
+function renderRow(chat, { selectedUser, currentUserId, isOnline, onSelect, selectMode, selected, toggleSelect }) {
   if (!chat?._id) return null;
   const active    = selectedUser?._id === chat._id;
   const isMe      = chat.lastMessage?.sender?.toString() === currentUserId?.toString();
   const hasUnread = !isMe && chat.lastMessage && !chat.lastMessage.read;
   const online    = isOnline?.(chat._id);
+  const isChecked = selected.has(chat._id);
 
   return (
     <button
       key={chat._id}
       type="button"
-      onClick={() => onSelect(chat)}
+      onClick={() => {
+        if (selectMode) { toggleSelect(chat._id); return; }
+        onSelect(chat);
+      }}
       className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-colors
-        ${active ? "bg-neutral-900" : "hover:bg-neutral-950"}`}
+        ${active && !selectMode ? "bg-neutral-900" : "hover:bg-neutral-950"}`}
     >
-      <ChatAvatar
-        src={chat.profilePic}
-        name={chat.username || ""}
-        size="md"
-        online={online}
-      />
+      {/* Checkbox in select mode, avatar otherwise (Code 2 feature) */}
+      {selectMode ? (
+        <div className="flex items-center justify-center w-10 h-10 flex-shrink-0">
+          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors
+            ${isChecked ? "bg-blue-500 border-blue-500" : "border-neutral-500"}`}
+          >
+            {isChecked && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            )}
+          </div>
+        </div>
+      ) : (
+        <ChatAvatar
+          src={chat.profilePic}
+          name={chat.username || ""}
+          size="md"
+          online={online}
+        />
+      )}
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">

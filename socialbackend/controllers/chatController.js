@@ -73,6 +73,7 @@ exports.sendImageMessage = async (req, res) => {
 };
 
 // ── GET MESSAGES ──────────────────────────────────────────────────────────────
+// ── GET MESSAGES ──────────────────────────────────────────────────────────────
 exports.getChat = async (req, res) => {
   try {
     const me    = getId(req);
@@ -82,6 +83,7 @@ exports.getChat = async (req, res) => {
         { sender: me,    receiver: other },
         { sender: other, receiver: me    },
       ],
+      deletedFor: { $ne: me },
     }).sort({ createdAt: 1 }).lean();
     return res.status(200).json({ success: true, messages });
   } catch (err) {
@@ -90,14 +92,37 @@ exports.getChat = async (req, res) => {
 };
 
 // ── MARK READ ─────────────────────────────────────────────────────────────────
+// ── MARK READ — emit socket so sender's blue tick updates instantly ───────────
 exports.markAsRead = async (req, res) => {
   try {
-    const me           = getId(req);
+    const me = getId(req);
     const { senderId } = req.body;
-    await Message.updateMany(
+
+    // 🔥 1. Get unread IDs FIRST
+    const unread = await Message.find(
       { sender: senderId, receiver: me, read: false },
-      { $set: { read: true } }
-    );
+      { _id: 1 }
+    ).lean();
+
+    const ids = unread.map(m => m._id.toString());
+
+    // 🔥 2. Update them
+    if (ids.length > 0) {
+      await Message.updateMany(
+        { _id: { $in: ids } },
+        { $set: { read: true } }
+      );
+
+      // 🔥 3. Emit to sender
+      const io = req.app.get("io");
+      if (io) {
+        io.to(senderId.toString()).emit("messagesRead", {
+          by: me,
+          messageIds: ids,
+        });
+      }
+    }
+
     return res.status(200).json({ success: true });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -118,7 +143,7 @@ exports.getChatList = async (req, res) => {
 
     // 2. Get existing conversations (users you've messaged)
     const chats = await Message.aggregate([
-      { $match: { $or: [{ sender: userId }, { receiver: userId }] } },
+      { $match: { $or: [{ sender: userId }, { receiver: userId }],deletedFor:{$ne:userId}, } },
       { $sort:  { createdAt: -1 } },
       {
         $group: {
@@ -174,9 +199,47 @@ exports.deleteChat = async (req, res) => {
   try {
     const me    = getId(req);
     const other = req.params.userId;
-    await Message.deleteMany({
+    await Message.updateMany({
       $or: [{ sender: me, receiver: other }, { sender: other, receiver: me }],
-    });
+    },
+  {
+     $addToSet:{deletedFor:me}
+  });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteMessage = async (req, res) => {
+  try {
+    const userId = getId(req);
+    const { messageId } = req.params;
+    const { deleteFor } = req.body; // "me" or "everyone"
+
+    const msg = await Message.findById(messageId);
+    if (!msg) return res.status(404).json({ success: false, message: "Message not found" });
+
+    if (deleteFor === "everyone") {
+      // only sender can delete for everyone
+      if (msg.sender.toString() !== userId)
+        return res.status(403).json({ success: false, message: "Not allowed" });
+      await Message.findByIdAndDelete(messageId);
+
+      // notify both users via socket
+      const io = req.app.get("io");
+      if (io) {
+        io.to(msg.sender.toString()).emit("messageDeleted", { messageId, deleteFor: "everyone" });
+        io.to(msg.receiver.toString()).emit("messageDeleted", { messageId, deleteFor: "everyone" });
+      }
+    } else {
+      await Message.updateOne(
+        {_id:messageId},{
+          $addToSet:{deletedFor:userId}
+        }
+      )
+    }
+
     return res.status(200).json({ success: true });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useContext, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; // ✅ added useLocation
+import { useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import socket from "../socket";
 import {
@@ -17,7 +17,7 @@ import ChatInput   from "../components/chat/chatInput";
 export default function Chat() {
   const { user } = useContext(AuthContext);
   const navigate  = useNavigate();
-  const location  = useLocation(); // ✅ read state passed from Profile
+  const location  = useLocation();
 
   const currentUserId = user?._id?.toString() ?? null;
 
@@ -44,10 +44,6 @@ export default function Chat() {
     selectedUserRef.current = selectedUser;
   }, [selectedUser]);
 
-  useEffect(() => {
-    console.log("onlineUsers state:", onlineUsers);
-  }, [onlineUsers]);
-
   // ── Resize listener ────────────────────────────────────────────────
   useEffect(() => {
     const fn = () => setIsDesktop(window.innerWidth >= 768);
@@ -66,20 +62,15 @@ export default function Chat() {
     const incoming = location.state?.selectedUser;
     if (!incoming?._id) return;
 
-    // Wait until chatList is loaded so handleSelect can find the user
-    // If chatList is empty (still loading) we retry once it's populated
     const selectIncoming = (list) => {
-      // Try to find the full entry from chatList (has lastMessage etc.)
       const existing = list.find((c) => c._id?.toString() === incoming._id.toString());
       handleSelect(existing ?? incoming);
-      // On mobile, switch to chat pane immediately
       setMobilePane("chat");
     };
 
     if (chatList.length > 0) {
       selectIncoming(chatList);
     } else {
-      // chatList not loaded yet — wait for it via a one-time effect
       const unsub = setTimeout(() => {
         getChatList().then((r) => {
           const list = r?.chats ?? [];
@@ -90,39 +81,54 @@ export default function Chat() {
       return () => clearTimeout(unsub);
     }
 
-    // Clear location state so refreshing the page doesn't re-open the chat
     window.history.replaceState({}, "");
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Socket listeners only ──────────────────────────────────────────
+  // ── Socket listeners ───────────────────────────────────────────────
   useEffect(() => {
-    const onReceiveMessage = (msg) => {
-      const myId    = myIdRef.current;
+    const onReceiveMessage = async (msg) => {
+      const myId     = myIdRef.current;
       const selected = selectedUserRef.current;
 
       if (!myId || !msg) return;
 
-      const sId = msg.sender?._id?.toString() ?? msg.sender?.toString() ?? "";
-      const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString() ?? "";
+      const sId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+      const rId = msg.receiver?._id?.toString() ?? msg.receiver?.toString();
 
-      if (selected) {
-        const isOpenChat =
-          (sId === selected._id?.toString() && rId === myId) ||
-          (sId === myId && rId === selected._id?.toString());
+      const otherUserId = sId === myId ? rId : sId;
 
-        if (isOpenChat) {
-          setMessages((prev) => {
-            const id = msg._id?.toString();
-            if (prev.some((m) => m._id?.toString() === id)) return prev;
-            return [...prev, msg];
-          });
+      const isOpenChat =
+        selected &&
+        sId === selected._id?.toString() &&
+        rId === myId;
+
+      // Add to UI only if this conversation is open
+      if (
+        selected && (
+          isOpenChat ||
+          (sId === myId && rId === selected._id?.toString())
+        )
+      ) {
+        setMessages((prev) => {
+          const id = msg._id?.toString();
+          if (prev.some((m) => m._id?.toString() === id)) return prev;
+          return [...prev, msg];
+        });
+      }
+
+      // Mark as read if the other user's chat is currently open
+      if (isOpenChat) {
+        try {
+          await markAsRead({ senderId: selected._id });
+        } catch (e) {
+          console.error("markAsRead failed:", e);
         }
       }
 
-      const otherUserId = sId === myId ? rId : sId;
+      // Always update sidebar preview even if no chat is open
       setChatList((prev) => {
         const idx = prev.findIndex((c) => c._id?.toString() === otherUserId);
-        if (idx === -1) { refreshList(); return prev; }
+        if (idx === -1) return prev;
         const next = [...prev];
         next[idx] = { ...next[idx], lastMessage: msg };
         return next;
@@ -138,19 +144,58 @@ export default function Chat() {
     };
 
     const onOnlineUsers = (ids) => {
-      console.log("onlineUsers received:", ids);
       setOnlineUsers(ids.map(String));
+    };
+
+    const onMessageDeleted = ({ messageId }) => {
+      setMessages((prev) => prev.filter((m) => m._id?.toString() !== messageId));
+    };
+
+    const onMessagesRead = ({ by, messageIds }) => {
+      const myId = myIdRef.current;
+      if (!myId) return;
+
+      const readSet = new Set(messageIds ?? []);
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+          if (senderId !== myId) return msg;
+          if (readSet.size > 0) {
+            return readSet.has(msg._id?.toString()) ? { ...msg, read: true } : msg;
+          }
+          return { ...msg, read: true };
+        })
+      );
+
+      // Also update read status on the sidebar lastMessage preview (blue tick)
+      setChatList((prev) =>
+        prev.map((c) => {
+          if (!c.lastMessage) return c;
+          const lastMsgSender =
+            c.lastMessage.sender?._id?.toString() ?? c.lastMessage.sender?.toString();
+          if (lastMsgSender !== myId) return c;
+          if (readSet.has(c.lastMessage._id?.toString())) {
+            return { ...c, lastMessage: { ...c.lastMessage, read: true } };
+          }
+          return c;
+        })
+      );
     };
 
     socket.on("receiveMessage", onReceiveMessage);
     socket.on("typing",         onTyping);
     socket.on("onlineUsers",    onOnlineUsers);
+    socket.on("messageDeleted", onMessageDeleted);
+    socket.on("messagesRead",   onMessagesRead);
     socket.emit("getOnlineUsers");
 
     return () => {
       socket.off("receiveMessage", onReceiveMessage);
       socket.off("typing",         onTyping);
       socket.off("onlineUsers",    onOnlineUsers);
+      socket.off("messageDeleted", onMessageDeleted);
+      socket.off("messagesRead",   onMessagesRead);
       clearTimeout(typingTimer.current);
       clearTimeout(myTypingTimer.current);
     };
@@ -179,9 +224,33 @@ export default function Chat() {
         const live       = prev.filter((m) => !fetchedIds.has(m._id?.toString()));
         return [...fetched, ...live];
       });
-      markAsRead(chat._id);
     });
   }, [isDesktop]);
+
+  const handleDeleteMessage = useCallback((messageId) => {
+    setMessages((prev) => prev.filter((m) => m._id?.toString() !== messageId));
+  }, []);
+
+  const handleDeleteChat = useCallback((ids) => {
+    const idStrings = ids.map((id) => id?.toString());
+
+    // Optimistically remove from UI immediately
+    setChatList((prev) =>
+      prev.filter((c) => !idStrings.includes(c._id?.toString()))
+    );
+
+    // Reset chat window if the open chat was deleted
+    if (selectedUser && idStrings.includes(selectedUser._id?.toString())) {
+      setSelectedUser(null);
+      setMessages([]);
+      chatIdRef.current = null;
+    }
+
+    // ✅ Re-fetch so deleted users reappear in Suggested instantly.
+    // Backend returns following-users with lastMessage:null after soft-delete,
+    // so they show up in the Suggested section automatically.
+    refreshList();
+  }, [selectedUser, refreshList]);
 
   // ── Send text ──────────────────────────────────────────────────────
   const handleSend = useCallback(async (overrideText) => {
@@ -283,6 +352,7 @@ export default function Chat() {
           onSelect={handleSelect}
           onProfileClick={handleProfileClick}
           isOnline={isOnline}
+          onDeleteChat={handleDeleteChat}
         />
       </div>
 
@@ -304,6 +374,7 @@ export default function Chat() {
               reactions={reactions}
               onReact={handleReact}
               onProfileClick={handleProfileClick}
+              onDeleteMessage={handleDeleteMessage}
             />
             <ChatInput
               text={text}

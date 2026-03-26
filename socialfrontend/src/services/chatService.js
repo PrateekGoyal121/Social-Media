@@ -68,3 +68,15 @@ export const deleteChat = async (userId) => {
     return null;
   }
 };
+
+export const deleteMessage = async (messageId, deleteFor = "everyone") => {
+  try {
+    const res = await API.delete(`/v1/chat/message/${messageId}`, {
+      data: { deleteFor }
+    });
+    return res.data;
+  } catch (err) {
+    console.error("deleteMessage:", err.response?.data || err.message);
+    return null;
+  }
+};

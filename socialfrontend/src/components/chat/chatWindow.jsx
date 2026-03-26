@@ -13,7 +13,7 @@ const sameDay = (a, b) => {
 
 export default function ChatWindow({
   messages = [], currentUserId, selectedUser,
-  otherTyping, reactions = {}, onReact, onProfileClick,
+  otherTyping, reactions = {}, onReact, onProfileClick, onDeleteMessage,
 }) {
   const bottomRef = useRef(null);
 
@@ -55,6 +55,7 @@ export default function ChatWindow({
               reaction={reactions[msg._id]}
               onReact={onReact}
               onProfileClick={onProfileClick}
+              onDelete={onDeleteMessage}
             />
           </div>
         );

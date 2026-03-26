@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import ChatAvatar from "./chatAvatar";
 import { CheckIcon, CheckReadIcon } from "./chatIcon";
+import { deleteMessage } from "../../services/chatService";
 
 const REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 
@@ -32,11 +33,28 @@ const parseMsg = (text = "") => {
   return { imageUrl: null, caption: "" };
 };
 
-export function MessageBubble({ msg, isMe, isLast, selectedUser, reaction, onReact, onProfileClick }) {
+export function MessageBubble({ msg, isMe, isLast, selectedUser, reaction, onReact, onProfileClick, onDelete }) {
   const [hover,    setHover]    = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [showMenu,   setShowMenu]   = useState(false); // ✅ delete menu
+  const longPressTimer = useRef(null); // ✅ long press
 
   if (!msg) return null;
+
+  // ✅ Long press handlers
+  const handlePressStart = () => {
+    longPressTimer.current = setTimeout(() => setShowMenu(true), 500);
+  };
+  const handlePressEnd = () => {
+    clearTimeout(longPressTimer.current);
+  };
+
+  // ✅ Delete handler
+  const handleDelete = async (deleteFor) => {
+    setShowMenu(false);
+    const res = await deleteMessage(msg._id, deleteFor);
+    if (res?.success) onDelete?.(msg._id, deleteFor);
+  };
 
   const text = String(msg.text ?? "");
   const parsed  = parseMsg(text);
@@ -62,9 +80,13 @@ export function MessageBubble({ msg, isMe, isLast, selectedUser, reaction, onRea
       marginBottom: isLast ? 14 : 3,
     }}>
       <div
-        style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: rowDir }}
+        style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: rowDir, position: "relative"  }}
         onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => {setHover(false);}}
+      onMouseDown={handlePressStart}
+        onMouseUp={handlePressEnd}
+        onTouchStart={handlePressStart}
+        onTouchEnd={handlePressEnd}
       >
         {/* Other user avatar */}
         {!isMe && (
@@ -84,7 +106,7 @@ export function MessageBubble({ msg, isMe, isLast, selectedUser, reaction, onRea
         <div style={{ position: "relative", maxWidth: 280 }}>
 
           {/* Hover reaction bar */}
-          {hover && (
+          {hover && !showMenu && (
             <div style={{
               position: "absolute", bottom: "calc(100% + 8px)",
               [isMe ? "right" : "left"]: 0,
@@ -114,7 +136,89 @@ export function MessageBubble({ msg, isMe, isLast, selectedUser, reaction, onRea
                   {e}
                 </button>
               ))}
+              {/* ✅ Delete button in reaction bar */}
+              <div style={{ width: 1, background: "#2a2a2a", height: 20, margin: "0 4px" }} />
+              <button
+                type="button"
+                onClick={() => setShowMenu(true)}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 3px", color: "#888" }}
+                title="Delete"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14H6L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4h6v2"/>
+                </svg>
+              </button>
             </div>
+          )}
+          {/* ✅ Delete menu (on trash click or long press) */}
+          {showMenu && (
+            <>
+              {/* backdrop */}
+              <div
+                onClick={() => setShowMenu(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 20 }}
+              />
+              <div style={{
+                position: "absolute",
+                bottom: "calc(100% + 8px)",
+                [isMe ? "right" : "left"]: 0,
+                background: "#1c1c1c",
+                border: "1px solid #2a2a2a",
+                borderRadius: 12,
+                overflow: "hidden",
+                zIndex: 30,
+                minWidth: 180,
+                boxShadow: "0 4px 24px rgba(0,0,0,0.7)",
+              }}>
+                {isMe && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete("everyone")}
+                    style={{
+                      width: "100%", padding: "12px 16px", background: "none",
+                      border: "none", cursor: "pointer", color: "#ff4444",
+                      fontSize: 14, textAlign: "left", display: "flex",
+                      alignItems: "center", gap: 10,
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#2a2a2a"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                  >
+                    🗑️ Delete for everyone
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete("me")}
+                  style={{
+                    width: "100%", padding: "12px 16px", background: "none",
+                    border: "none", cursor: "pointer", color: "#ccc",
+                    fontSize: 14, textAlign: "left", display: "flex",
+                    alignItems: "center", gap: 10,
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#2a2a2a"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                >
+                  🗑️ Delete for me
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMenu(false)}
+                  style={{
+                    width: "100%", padding: "12px 16px", background: "none",
+                    border: "none", cursor: "pointer", color: "#666",
+                    fontSize: 14, textAlign: "left",
+                    borderTop: "1px solid #2a2a2a",
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#2a2a2a"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
           )}
 
           {/* ── Content ─────────────────────────────────────────── */}

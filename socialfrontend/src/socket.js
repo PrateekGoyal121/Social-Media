@@ -20,3 +20,4 @@ socket.on("disconnect",    (r) => console.log("🔴 socket disconnected:", r));
 socket.on("connect_error", (e) => console.error("🔴 socket error:", e.message));
 
 export default socket;
+
