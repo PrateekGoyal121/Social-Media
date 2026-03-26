@@ -8,7 +8,7 @@ const { Server } = require("socket.io");
 // const {notificationSocket} = require("./sockets/notificationSocket");
 // const chatSocket = require("./sockets/chatSocket");
 const cors = require("cors");
-const { initSocket } = require("./sockets/socket");
+const {initSocket}=require("./sockets/socket");
 
 dotenv.config();
 
@@ -16,7 +16,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // DB connect
-const connectDB = require("./config/db");
+const connectDB = require("./Config/db");
 connectDB();
 
 // middleware
