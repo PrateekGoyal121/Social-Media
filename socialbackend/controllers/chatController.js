@@ -249,12 +249,36 @@ exports.deleteMessage = async (req, res) => {
 // ── MARK ALL READ ─────────────────────────────────────────────────────────────
 exports.markAllAsRead = async (req, res) => {
   try {
-    const me     = getId(req);
-    const result = await Message.updateMany(
+    const me = getId(req);
+
+    // ✅ FIX 3: Get the IDs before updating so we can emit them
+    const unread = await Message.find(
       { receiver: me, read: false },
-      { $set: { read: true } }
-    );
-    return res.status(200).json({ success: true, updatedCount: result.modifiedCount });
+      { _id: 1, sender: 1 }
+    ).lean();
+
+    if (unread.length > 0) {
+      await Message.updateMany(
+        { receiver: me, read: false },
+        { $set: { read: true } }
+      );
+
+      // Group by sender and emit to each
+      const io = req.app.get("io");
+      if (io) {
+        const bySender = {};
+        unread.forEach((m) => {
+          const s = m.sender.toString();
+          if (!bySender[s]) bySender[s] = [];
+          bySender[s].push(m._id.toString());
+        });
+        Object.entries(bySender).forEach(([senderId, ids]) => {
+          io.to(senderId).emit("messagesRead", { by: me, messageIds: ids });
+        });
+      }
+    }
+
+    return res.status(200).json({ success: true, updatedCount: unread.length });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

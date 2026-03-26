@@ -216,15 +216,37 @@ export default function Chat() {
     setReactions({});
     if (!isDesktop) setMobilePane("chat");
 
+    markAsRead({ senderId: chat._id }).catch((e) =>
+    console.error("markAsRead on select failed:", e)
+  );
+
+  // Add this inside handleSelect right after the markAsRead call
+const myId = myIdRef.current;
+
+// ✅ FIX 2: Optimistically mark all current messages from this sender as read in UI
+setMessages((prev) =>
+  prev.map((msg) => {
+    const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+    return senderId !== myId ? { ...msg, read: true } : msg;
+  })
+);
+
     getChat(chat._id).then((r) => {
-      if (!r?.success) return;
-      const fetched = r.messages ?? [];
-      setMessages((prev) => {
-        const fetchedIds = new Set(fetched.map((m) => m._id?.toString()));
-        const live       = prev.filter((m) => !fetchedIds.has(m._id?.toString()));
-        return [...fetched, ...live];
-      });
-    });
+  if (!r?.success) return;
+  const fetched = r.messages ?? [];
+
+  // ✅ FIX 2b: Mark fetched messages from the other user as read in UI immediately
+  const markedRead = fetched.map((msg) => {
+    const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
+    return senderId !== myIdRef.current ? { ...msg, read: true } : msg;
+  });
+
+  setMessages((prev) => {
+    const fetchedIds = new Set(markedRead.map((m) => m._id?.toString()));
+    const live = prev.filter((m) => !fetchedIds.has(m._id?.toString()));
+    return [...markedRead, ...live];
+  });
+});
   }, [isDesktop]);
 
   const handleDeleteMessage = useCallback((messageId) => {

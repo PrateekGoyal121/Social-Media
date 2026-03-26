@@ -49,7 +49,7 @@ export const getChatList = async () => {
   }
 };
 
-export const markAsRead = async (senderId) => {
+export const markAsRead = async ({senderId}) => {
   try {
     const res = await API.put("/v1/chat/read", { senderId });
     return res.data;
