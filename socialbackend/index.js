@@ -54,7 +54,7 @@ initSocket(io);
 // make socket accessible in controllers
 app.set("io", io);
 
-
+app.get("/", (req, res) => res.send("Server is Live!"));
 const post=require("./routes/postRoutes");
 app.use('/api/v1/post',post);
 
