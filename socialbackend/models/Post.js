@@ -1,26 +1,36 @@
 const mongoose = require("mongoose");
 
-const postSchema = new mongoose.Schema({
+const postSchema = new mongoose.Schema(
+  {
     author: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     content: {
-        type: String,
-        default: "",
+      type: String,
+      default: "",
     },
     image: {
-        type: String,
-        default: "",
+      type: String,
+      default: "",
     },
     likes: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-        },
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
     ],
-});
+    // ✅ tracks which users saved this post
+    savedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: [],
+      },
+    ],
+  },
+  { timestamps: true } // ✅ adds createdAt + updatedAt (needed for comment timestamps)
+);
 
-module.exports =  mongoose.model("Post", postSchema);
-
+module.exports = mongoose.model("Post", postSchema);

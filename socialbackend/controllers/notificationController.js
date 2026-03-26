@@ -1,183 +1,118 @@
 const Notification = require("../models/Notification");
 
-/**
- * @desc    Get all notifications of logged-in user
- * @route   GET /api/notifications
- * @access  Private
- */
 exports.getNotifications = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const notifications = await Notification.find({ receiver: userId })
+    const notifications = await Notification.find({ receiver: req.user.id })
       .populate("sender", "username profilePic")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      count: notifications.length,
-      notifications,
-    });
+    res.status(200).json({ success: true, count: notifications.length, notifications });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch notifications",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * @desc    Mark single notification as read
- * @route   PUT /api/notifications/:id/read
- * @access  Private
- */
 exports.markAsRead = async (req, res) => {
   try {
-    const notificationId = req.params.id;
-
-    const notification = await Notification.findById(notificationId);
-
-    if (!notification) {
+    const notification = await Notification.findById(req.params.id);
+    if (!notification)
       return res.status(404).json({ message: "Notification not found" });
-    }
-
-    // Only receiver can mark as read
-    if (notification.receiver.toString() !== req.user.id) {
+    if (notification.receiver.toString() !== req.user.id)
       return res.status(403).json({ message: "Not authorized" });
-    }
 
     notification.isRead = true;
     await notification.save();
 
-    res.status(200).json({
-      success: true,
-      message: "Notification marked as read",
-    });
+    res.status(200).json({ success: true, message: "Notification marked as read" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to update notification",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * @desc    Mark all notifications as read
- * @route   PUT /api/notifications/read-all
- * @access  Private
- */
 exports.markAllAsRead = async (req, res) => {
   try {
     await Notification.updateMany(
       { receiver: req.user.id, isRead: false },
       { isRead: true }
     );
-
-    res.status(200).json({
-      success: true,
-      message: "All notifications marked as read",
-    });
+    res.status(200).json({ success: true, message: "All notifications marked as read" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to mark notifications",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * @desc    Delete a notification
- * @route   DELETE /api/notifications/:id
- * @access  Private
- */
 exports.deleteNotification = async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
-
-    if (!notification) {
+    if (!notification)
       return res.status(404).json({ message: "Notification not found" });
-    }
-
-    if (notification.receiver.toString() !== req.user.id) {
+    if (notification.receiver.toString() !== req.user.id)
       return res.status(403).json({ message: "Not authorized" });
-    }
 
     await notification.deleteOne();
-
-    res.status(200).json({
-      success: true,
-      message: "Notification deleted",
-    });
+    res.status(200).json({ success: true, message: "Notification deleted" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete notification",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * 🔔 Internal helper
- * Used when like/comment/follow happens
- */
-exports.createNotification = async ({
-  sender,
-  receiver,
-  type,
-  post,
-}) => {
+// ── CREATE NOTIFICATION (internal helper called by other controllers) ─────────
+exports.createNotification = async ({ sender, receiver, type, post }) => {
   try {
-    // ✅ Safety checks (PREVENTS toString crash)
-    if (!sender || !receiver || !type) {
-      console.error("Notification error: missing fields", {
-        sender,
-        receiver,
-        type,
-      });
-      return null;
-    }
+    if (!sender || !receiver || !type) return null;
 
-    // 🚫 Avoid self-notifications
+    // Never notify yourself
     if (sender.toString() === receiver.toString()) return null;
 
-    const notification = await Notification.create({
-      sender,
-      receiver,
-      type,
-      post,
-    });
+    const notification = await Notification.create({ sender, receiver, type, post });
 
-    // Optional: populate sender for real-time usage
-    return await notification.populate("sender", "username profilePic");
+    const populated = await Notification.findById(notification._id)
+      .populate("sender", "username profilePic")
+      .lean();
+
+    // Stringify IDs for consistency on the frontend
+    populated._id      = populated._id.toString();
+    populated.sender   = {
+      ...populated.sender,
+      _id: populated.sender._id.toString(),
+    };
+    populated.receiver = populated.receiver.toString();
+    if (populated.post) populated.post = populated.post.toString();
+
+    // Use rooms — io.to(userId) works regardless of reconnects or multiple tabs
+    // No need for a manual onlineUsers map anymore
+    // const { getIO } = require("../sockets/notificationSocket");
+    // const io = getIO();
+
+    const {getIO}=require("../sockets/socket");
+    const io = getIO();
+
+    if (io) {
+      io.to(receiver.toString()).emit("newNotification", populated);
+      console.log("✅ Notification emitted to room:", receiver.toString());
+    } else {
+      console.warn("⚠️ io not available in createNotification");
+    }
+
+    return populated;
   } catch (error) {
-    console.error("Notification error:", error.message);
+    console.error("createNotification error:", error.message);
     return null;
   }
 };
 
+// ── CREATE NOTIFICATION (API route handler) ───────────────────────────────────
 exports.createNotificationAPI = async (req, res) => {
   try {
     const { receiver, type, post } = req.body;
-
-    await exports.createNotification({
+    const notification = await exports.createNotification({
       sender: req.user.id,
       receiver,
       type,
       post,
     });
-
-    res.status(201).json({
-      success: true,
-      message: "Notification created",
-    });
+    res.status(201).json({ success: true, notification });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

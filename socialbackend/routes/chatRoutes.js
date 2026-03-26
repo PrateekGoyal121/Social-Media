@@ -1,21 +1,26 @@
 const express = require("express");
 const {
   sendMessage,
+  sendImageMessage,
   getChat,
   markAsRead,
   getChatList,
   deleteChat,
   markAllAsRead,
+  deleteMessage,
 } = require("../controllers/chatController");
-const {auth} = require("../middleware/authMiddleware");
+const { auth } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.post("/send", auth, sendMessage);
-router.get("/:userId", auth, getChat);
-router.put("/read", auth, markAsRead);
-router.get("/", auth, getChatList);
+// Static routes BEFORE dynamic /:userId
+router.get("/",                  auth, getChatList);
+router.post("/send",             auth, sendMessage);
+router.post("/send-image",       auth, sendImageMessage);
+router.put("/read",              auth, markAsRead);
+router.put("/mark-all-read",     auth, markAllAsRead);
 router.delete("/delete/:userId", auth, deleteChat);
-router.put("/mark-all-read", auth, markAllAsRead);
+router.delete("/message/:messageId", auth, deleteMessage);
+router.get("/:userId",           auth, getChat);      // dynamic — always last
 
 module.exports = router;

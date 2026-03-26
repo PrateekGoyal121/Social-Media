@@ -53,3 +53,26 @@ export const getPostComments = async (postId) => {
   const res = await API.get(`/v1/post/${postId}/getcomments`);
   return res.data;
 };
+
+export const toggleSavePost = async (postId) => {
+  const res = await API.put(`/v1/post/${postId}/save`);
+  return res.data;
+};
+ 
+// get all saved posts of current user
+export const getSavedPosts = async () => {
+  const res = await API.get("/v1/post/saved");
+  return res.data;
+};
+
+export const searchUsers = async (username) => {
+  const res = await API.get(`/v1/post/search?username=${encodeURIComponent(username)}`);
+  return res.data;
+};
+
+// ── USERS ─────────────────────────────────────────────────────────────────────
+
+export const getSuggestedUsers = async () => {
+  const res = await API.get('/v1/post/suggestions/users');
+  return res.data;
+};

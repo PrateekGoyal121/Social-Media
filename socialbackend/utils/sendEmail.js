@@ -26,4 +26,3 @@ exports.sendmail = async (email, title, body) => {
         console.log(error.message);
     }
 }
-
